@@ -59,3 +59,7 @@ build/
 
 # Folder lokal Vercel CLI
 .vercel
+
+# Backend Vercel (Sprint 4): semua .env di server/ kecuali contohnya
+server/.env*
+!server/.env.example

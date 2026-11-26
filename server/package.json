@@ -1,0 +1,23 @@
+{
+  "name": "rawuh-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend Rawuh (Vercel Functions + Firebase Admin SDK + Midtrans Sandbox)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vercel dev",
+    "typecheck": "tsc --noEmit -p .",
+    "seed:sprint4": "tsx scripts/seed-sprint4.ts"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@vercel/node": "^33.0.0",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.3"
+  }
+}

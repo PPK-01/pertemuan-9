@@ -1,6 +1,10 @@
-// ===== Tipe Domain Rawuh - Sprint 2 & Sprint 3 =====
+// ===== Tipe Domain Rawuh - Sprint 2, 3, dan 4 =====
 
-export type Role = 'praktikan' | 'asisten';
+/**
+ * Satu role per akun. 'asisten' adalah "Asprak" di UI/SRS (nilai di data tetap 'asisten' agar
+ * dokumen lama tetap valid). 'aslab' tidak bisa mendaftar sendiri: dibuat lewat seed/Admin SDK (Sprint 4).
+ */
+export type Role = 'praktikan' | 'asisten' | 'aslab';
 export type Kelas = string;
 export type Praktikum = string;
 
@@ -34,8 +38,20 @@ export type User = {
   name: string;
   email: string;
   role: Role;
-  /** Hanya diisi untuk praktikan. */
+  /**
+   * Hanya diisi untuk praktikan. DATA LAMA Sprint 2–3: sejak Sprint 4 keanggotaan ditentukan oleh
+   * `Lab.praktikanEmails`, bukan `kelas`. Dipertahankan selama masa transisi (TRANSISI-SPRINT4).
+   */
   kelas?: Kelas;
+  /** Hanya diisi untuk aslab (Sprint 4): mata kuliah yang diampu. */
+  mataKuliahIds?: string[];
+};
+
+/** Mata kuliah praktikum (Sprint 4). Dibuat lewat seed/Admin SDK; klien hanya membaca. */
+export type MataKuliah = {
+  id: string;
+  kode: string;
+  nama: string;
 };
 
 export type KelasPraktikum = {
@@ -60,6 +76,19 @@ export type Lab = {
   createdAt: string;
   updatedBy: string;
   updatedAt: string;
+  /**
+   * Sprint 4: lab = rombongan praktikum per mata kuliah dengan lokasi sendiri. Keempat field di bawah
+   * opsional di tipe karena lab lama (Sprint 3) belum memilikinya sampai skrip seed-sprint4 dijalankan.
+   * Pembaca wajib memperlakukan nilai kosong sebagai: tanpa mata kuliah, tanpa anggota,
+   * graceMinutes = DEFAULT_GRACE_MINUTES.
+   */
+  mataKuliahId?: string;
+  /** Email praktikan anggota rombongan; selalu huruf kecil dan di-trim (normalizeEmail). */
+  praktikanEmails?: string[];
+  /** Email Asprak yang bertanggung jawab atas sesi lab ini; selalu huruf kecil dan di-trim. */
+  asprakEmails?: string[];
+  /** Toleransi keterlambatan (menit) sebelum presensi dihitung telat dan kena denda. 0..60. */
+  graceMinutes?: number;
 };
 
 export type Session = {
@@ -138,7 +167,58 @@ export type NotifPayload =
   | { type: 'session_opened'; sessionId: string }
   | { type: 'session_created'; sessionId: string }
   | { type: 'izin_decided'; izinId: string }
-  | { type: 'location_changed'; sessionId: string };
+  | { type: 'location_changed'; sessionId: string }
+  // Sprint 4, dikirim dari server (Expo Push API). Diketuk membuka detail tagihan.
+  | { type: 'bill_created'; billId: string } // N7
+  | { type: 'payment_success'; billId: string } // N8
+  | { type: 'payment_failed'; billId: string }; // N9
+
+// ===== Denda & Pembayaran (Sprint 4) =====
+// Client hanya MEMBACA bills dan payments; semua tulis lewat Admin SDK di server/.
+
+export const BILL_STATUS_LIST = ['unpaid', 'pending', 'success', 'failed'] as const;
+export type BillStatus = (typeof BILL_STATUS_LIST)[number];
+
+/** Tagihan denda telat. ID dokumen deterministik: `${sessionId}_${userId}` (satu telat = satu tagihan). */
+export type Bill = {
+  id: string;
+  userId: string;
+  userEmail: string;
+  sessionId: string;
+  labId: LabId;
+  mataKuliahId: string;
+  /** Rujukan ke attendances/{sessionId}_{userId}. */
+  attendanceId: string;
+  /** Rupiah, bilangan bulat. */
+  amount: number;
+  /** Menit keterlambatan dihitung sejak startAt sesi (lihat computeLateMinutes). */
+  lateMinutes: number;
+  status: BillStatus;
+  createdAt: string;
+  updatedAt: string;
+  paidAt?: string;
+  /** orderId percobaan bayar terakhir (payments/{orderId}). */
+  lastOrderId?: string;
+};
+
+export const PAYMENT_STATUS_LIST = ['pending', 'success', 'failed'] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUS_LIST)[number];
+
+/** Satu percobaan bayar. `id` = orderId Midtrans, unik per percobaan: `${billId}-${n}`. */
+export type Payment = {
+  id: string;
+  billId: string;
+  userId: string;
+  amount: number;
+  status: PaymentStatus;
+  /** transaction_status mentah dari Midtrans (settlement, pending, expire, ...). */
+  midtransStatus: string;
+  paymentType?: string;
+  redirectUrl?: string;
+  createdAt: string;
+  updatedAt: string;
+  settledAt?: string;
+};
 
 // ===== Analisis AI & Review Izin =====
 
@@ -248,6 +328,11 @@ export type CreateLabInput = {
   lat: number;
   lng: number;
   radiusM: number;
+  /** Sprint 4; wajib diisi form aslab, opsional di tipe agar kode Sprint 3 tetap valid. */
+  mataKuliahId?: string;
+  praktikanEmails?: string[];
+  asprakEmails?: string[];
+  graceMinutes?: number;
 };
 
 export type UpdateLabInput = Partial<CreateLabInput>;
