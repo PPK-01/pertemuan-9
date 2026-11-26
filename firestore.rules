@@ -7,6 +7,14 @@ service cloud.firestore {
     function me() { return get(/databases/$(db)/documents/users/$(uid())).data; }
     function isAsisten() { return hasProfile() && me().role == 'asisten'; }
     function isPraktikan() { return hasProfile() && me().role == 'praktikan'; }
+    function isAslab() { return hasProfile() && me().role == 'aslab'; }
+    // Identitas keanggotaan = email, dibandingkan dalam huruf kecil. Isi praktikanEmails/asprakEmails
+    // wajib sudah dinormalisasi (trim + huruf kecil) oleh klien/seed; rules tidak bisa mengiterasi list.
+    function myEmail() { return request.auth.token.email.lower(); }
+    // Lab lama (Sprint 3) belum punya praktikanEmails/asprakEmails: .get(..., []) menjadikannya "bukan anggota".
+    function isPraktikanOfLab(labId) { return myEmail() in labOf(labId).get('praktikanEmails', []); }
+    function isAsprakOfLab(labId) { return isAsisten() && myEmail() in labOf(labId).get('asprakEmails', []); }
+    function aslabOwnsMk(mkId) { return isAslab() && mkId is string && mkId in me().get('mataKuliahIds', []); }
     function sessionOf(sid) { return get(/databases/$(db)/documents/sessions/$(sid)).data; }
     function labOf(id) { return get(/databases/$(db)/documents/labs/$(id)).data; }
     function changedOnly(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
@@ -16,13 +24,17 @@ service cloud.firestore {
     }
 
     match /users/{id} {
-      allow read: if signedIn() && (uid() == id || isAsisten());
+      // Aslab membaca semua user: dashboard dan pengecekan "akun belum terdaftar" pada bulk insert.
+      allow read: if signedIn() && (uid() == id || isAsisten() || isAslab());
+      // Role 'aslab' TIDAK bisa dibuat dari klien (cabang bawah hanya menerima praktikan/asisten);
+      // akun aslab dibuat lewat seed/Admin SDK.
       allow create: if signedIn() && uid() == id
         && request.resource.data.keys().hasOnly(['name','email','role','kelas','inviteCode','createdAt'])
         && request.resource.data.name is string && request.resource.data.name.size() >= 2
         && request.resource.data.name.size() <= 50
         && (request.resource.data.role == 'praktikan'
-              ? request.resource.data.kelas is string
+              // kelas opsional sejak Sprint 4 (keanggotaan lewat lab); bila ada harus string.
+              ? (!('kelas' in request.resource.data) || request.resource.data.kelas is string)
               : (request.resource.data.role == 'asisten'
                   && request.resource.data.inviteCode
                      == get(/databases/$(db)/documents/config/asisten).data.inviteCode));
@@ -48,27 +60,56 @@ service cloud.firestore {
       allow create, update, delete: if isAsisten();
     }
 
-    match /labs/{labId} {
+    match /mataKuliah/{id} {
       allow read: if signedIn();
-      allow create, update: if isAsisten()
-        && request.resource.data.keys().hasOnly(['nama','gedung','lat','lng','radiusM',
-                                                 'createdBy','createdAt','updatedBy','updatedAt'])
+      allow write: if false;     // seed/Admin SDK
+    }
+
+    function validLab() {
+      return request.resource.data.keys().hasOnly(['nama','gedung','lat','lng','radiusM',
+                                                   'createdBy','createdAt','updatedBy','updatedAt',
+                                                   'mataKuliahId','praktikanEmails','asprakEmails','graceMinutes'])
+        && request.resource.data.keys().hasAll(['nama','lat','lng','radiusM',
+                                                'mataKuliahId','praktikanEmails','asprakEmails','graceMinutes'])
         && request.resource.data.nama is string
         && request.resource.data.nama.size() >= 2 && request.resource.data.nama.size() <= 50
         && request.resource.data.lat is number && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
         && request.resource.data.lng is number && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
         && request.resource.data.radiusM is int
-        && request.resource.data.radiusM >= 10 && request.resource.data.radiusM <= 200;
-      allow delete: if isAsisten();     // cek "masih dipakai" di service
+        && request.resource.data.radiusM >= 10 && request.resource.data.radiusM <= 200
+        && request.resource.data.mataKuliahId is string
+        && request.resource.data.graceMinutes is int
+        && request.resource.data.graceMinutes >= 0 && request.resource.data.graceMinutes <= 60
+        && request.resource.data.praktikanEmails is list && request.resource.data.praktikanEmails.size() <= 500
+        && request.resource.data.asprakEmails is list && request.resource.data.asprakEmails.size() <= 500;
+    }
+
+    // Sejak Sprint 4 hanya aslab pemilik mata kuliah yang menulis lab; asisten (Asprak) kehilangan hak tulis (FR-71).
+    match /labs/{labId} {
+      allow read: if signedIn();
+      allow create: if aslabOwnsMk(request.resource.data.get('mataKuliahId', null)) && validLab();
+      // Lab lama tanpa mataKuliahId tidak bisa diubah klien sampai seed-sprint4 --apply mengisinya.
+      allow update: if aslabOwnsMk(resource.data.get('mataKuliahId', null))
+        && aslabOwnsMk(request.resource.data.get('mataKuliahId', null))
+        && validLab();
+      allow delete: if aslabOwnsMk(resource.data.get('mataKuliahId', null));     // cek "masih dipakai" di service
     }
 
     match /sessions/{sid} {
-      allow read: if isAsisten() || (isPraktikan() && resource.data.kelas == me().kelas);
-      allow create: if isAsisten() && request.resource.data.status == 'scheduled'
+      allow read: if isAsisten() || isAslab()
+        || (isPraktikan()
+            && (resource.data.kelas == me().kelas                 // TRANSISI-SPRINT4: hapus setelah query praktikan pindah ke keanggotaan lab
+                || isPraktikanOfLab(resource.data.labId)));
+      // Asisten hanya menulis sesi di lab tempat emailnya ada di asprakEmails.
+      allow create: if isAsisten() && isAsprakOfLab(request.resource.data.labId)
+        && request.resource.data.status == 'scheduled'
         && request.resource.data.createdBy == uid()
         && request.resource.data.startAt < request.resource.data.endAt
         && exists(/databases/$(db)/documents/labs/$(request.resource.data.labId));
       allow update: if isAsisten()
+        // TRANSISI-SPRINT4: sesi Sprint 2 tanpa labId lolos cek lab; hapus cabang ini setelah semua sesi punya labId
+        && (!('labId' in resource.data) || isAsprakOfLab(resource.data.labId))
+        && (!('labId' in request.resource.data) || isAsprakOfLab(request.resource.data.labId))
         && request.resource.data.createdBy == resource.data.createdBy
         && request.resource.data.startAt < request.resource.data.endAt
         && ((resource.data.status == 'scheduled' && request.resource.data.status == 'scheduled')
@@ -76,7 +117,9 @@ service cloud.firestore {
                 && changedOnly(['topik', 'labId', 'endAt', 'updatedAt']))
             || (resource.data.status == 'scheduled' && request.resource.data.status == 'open')
             || (resource.data.status == 'open' && request.resource.data.status == 'closed'));
-      allow delete: if isAsisten() && resource.data.status == 'scheduled';
+      allow delete: if isAsisten() && resource.data.status == 'scheduled'
+        // TRANSISI-SPRINT4: sesi tanpa labId (Sprint 2) tetap boleh dihapus asisten
+        && (!('labId' in resource.data) || isAsprakOfLab(resource.data.labId));
       
       match /private/{d} { 
         allow read, write: if isAsisten(); 
@@ -84,15 +127,17 @@ service cloud.firestore {
     }
 
     match /attendances/{aid} {
-      allow read: if isAsisten() || (signedIn() && resource.data.userId == uid());
+      allow read: if isAsisten() || isAslab() || (signedIn() && resource.data.userId == uid());
       allow create: if isPraktikan()
         && request.resource.data.keys().hasOnly(['sessionId','userId','kelas','code','timestamp','labId','lokasi'])
         && aid == request.resource.data.sessionId + '_' + uid()
         && request.resource.data.userId == uid()
-        && request.resource.data.kelas == me().kelas
+        // kelas tidak lagi wajib; bila dikirim (klien lama) harus sama dengan kelas user. TRANSISI-SPRINT4: hapus setelah klien tidak mengirim kelas
+        && (!('kelas' in request.resource.data) || request.resource.data.kelas == me().kelas)
         && request.resource.data.timestamp == request.time
         && sessionOf(request.resource.data.sessionId).status == 'open'
-        && sessionOf(request.resource.data.sessionId).kelas == me().kelas
+        && (sessionOf(request.resource.data.sessionId).kelas == me().kelas   // TRANSISI-SPRINT4: hapus setelah query praktikan pindah ke keanggotaan lab
+            || isPraktikanOfLab(sessionOf(request.resource.data.sessionId).labId))
         && request.resource.data.code ==
            get(/databases/$(db)/documents/sessions/$(request.resource.data.sessionId)/private/code).data.code
         && !(exists(/databases/$(db)/documents/izin/$(aid))
@@ -111,17 +156,19 @@ service cloud.firestore {
     }
 
     match /izin/{iid} {
-      allow read: if isAsisten() || (signedIn() && resource.data.userId == uid());
+      allow read: if isAsisten() || isAslab() || (signedIn() && resource.data.userId == uid());
       allow create: if isPraktikan()
         && request.resource.data.keys().hasOnly(['sessionId','userId','userName','kelas','alasan','status','createdAt','updatedAt'])
         && iid == request.resource.data.sessionId + '_' + uid()
         && request.resource.data.userId == uid()
-        && request.resource.data.kelas == me().kelas
+        // kelas tidak lagi wajib; bila dikirim harus sama dengan kelas user. TRANSISI-SPRINT4: hapus setelah klien tidak mengirim kelas
+        && (!('kelas' in request.resource.data) || request.resource.data.kelas == me().kelas)
         && request.resource.data.status == 'pending_ai'
         && request.resource.data.alasan is string
         && request.resource.data.alasan.size() >= 10 && request.resource.data.alasan.size() <= 500
         && sessionOf(request.resource.data.sessionId).status in ['scheduled', 'open']
-        && sessionOf(request.resource.data.sessionId).kelas == me().kelas
+        && (sessionOf(request.resource.data.sessionId).kelas == me().kelas   // TRANSISI-SPRINT4: hapus setelah query praktikan pindah ke keanggotaan lab
+            || isPraktikanOfLab(sessionOf(request.resource.data.sessionId).labId))
         && !exists(/databases/$(db)/documents/attendances/$(iid));
       allow update: if (isAsisten() || resource.data.userId == uid())
         && resource.data.status in ['pending_ai', 'pending_review']
@@ -134,6 +181,23 @@ service cloud.firestore {
         && request.resource.data.review.keputusan == request.resource.data.status
         && changedOnly(['status', 'review', 'updatedAt']);
       allow delete: if false;
+    }
+
+    // Tagihan denda dan transaksi Midtrans: klien hanya MEMBACA; semua tulis lewat Admin SDK (server/).
+    match /bills/{id} {
+      allow read: if signedIn()
+        && (resource.data.userId == uid()
+            || isAslab()
+            || isAsprakOfLab(resource.data.labId));   // query asisten wajib where('labId','==',X)
+      allow write: if false;
+    }
+
+    match /payments/{id} {
+      allow read: if signedIn()
+        && (resource.data.userId == uid()
+            || isAslab()
+            || isAsprakOfLab(get(/databases/$(db)/documents/bills/$(resource.data.billId)).data.labId));   // query asisten wajib where('billId','==',X)
+      allow write: if false;
     }
   }
 }
