@@ -15,6 +15,7 @@ module.exports = [
       'ios/*',
       'android/*',
       'scripts/*',
+      'server/**',
     ],
   },
 ];
