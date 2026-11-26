@@ -53,3 +53,9 @@ skills-lock.json
 build/
 *.ipa
 *.tar.gz
+
+# Service account key Firebase (jangan pernah ter-commit)
+*firebase-adminsdk*.json
+
+# Folder lokal Vercel CLI
+.vercel
