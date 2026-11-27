@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { useAuthStatus, useCurrentUser } from '@/store/appStore';
 import { colors } from '@/theme/colors';
+import { getHomeRouteForRole } from '@/utils/routes';
 
 export default function IndexGate() {
   const authStatus = useAuthStatus();
@@ -15,10 +16,8 @@ export default function IndexGate() {
 
     if (!currentUser) {
       router.replace('/(auth)/login');
-    } else if (currentUser.role === 'asisten') {
-      router.replace('/asisten');
     } else {
-      router.replace('/praktikan/jadwal');
+      router.replace(getHomeRouteForRole(currentUser.role));
     }
   }, [authStatus, currentUser]);
 

@@ -21,6 +21,7 @@ import { useAppStore } from '@/store/appStore';
 import { colors } from '@/theme/colors';
 import { radius, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
+import { getHomeRouteForRole } from '@/utils/routes';
 
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
@@ -55,12 +56,7 @@ export default function LoginScreen() {
     setSubmitting(false);
 
     if (result.ok) {
-      const user = result.data;
-      if (user.role === 'asisten') {
-        router.replace('/asisten');
-      } else {
-        router.replace('/praktikan/jadwal');
-      }
+      router.replace(getHomeRouteForRole(result.data.role));
     } else {
       setGeneralError(result.message);
     }

@@ -15,6 +15,7 @@ import {
 } from '@/store/appStore';
 import type { NotifPayload } from '@/types';
 import { colors } from '@/theme/colors';
+import { getHomeRouteForRole } from '@/utils/routes';
 
 const navigationTheme = {
   ...DefaultTheme,
@@ -68,6 +69,7 @@ export default function RootLayout() {
     const inAuthGroup = rootSegment === '(auth)';
     const inAsistenGroup = rootSegment === 'asisten';
     const inPraktikanGroup = rootSegment === 'praktikan';
+    const inAslabGroup = rootSegment === 'aslab';
 
     if (!currentUser) {
       // Belum login, arahkan ke login jika mencoba buka rute terproteksi
@@ -85,11 +87,7 @@ export default function RootLayout() {
           return;
         }
 
-        if (currentUser.role === 'asisten') {
-          router.replace('/asisten');
-        } else {
-          router.replace('/praktikan/jadwal');
-        }
+        router.replace(getHomeRouteForRole(currentUser.role));
         return;
       }
 
@@ -102,11 +100,15 @@ export default function RootLayout() {
         return;
       }
 
-      // Lindungi rute lintas peran (FR-17)
-      if (currentUser.role === 'praktikan' && inAsistenGroup) {
-        router.replace('/praktikan/jadwal');
-      } else if (currentUser.role === 'asisten' && inPraktikanGroup) {
-        router.replace('/asisten');
+      // Lindungi rute lintas peran (FR-17, FR-60)
+      const allowedSegment =
+        currentUser.role === 'asisten'
+          ? 'asisten'
+          : currentUser.role === 'aslab'
+            ? 'aslab'
+            : 'praktikan';
+      if ((inAsistenGroup || inPraktikanGroup || inAslabGroup) && rootSegment !== allowedSegment) {
+        router.replace(getHomeRouteForRole(currentUser.role));
       }
     }
   }, [currentUser, authStatus, segments]);
