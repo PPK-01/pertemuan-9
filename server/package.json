@@ -12,7 +12,7 @@
     "seed:sprint4": "tsx scripts/seed-sprint4.ts"
   },
   "dependencies": {
-    "firebase-admin": "^14.5.1"
+    "firebase-admin": "^13.10.0"
   },
   "devDependencies": {
     "@types/node": "^20.19.43",
