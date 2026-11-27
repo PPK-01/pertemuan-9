@@ -1,7 +1,7 @@
 # Kontrak Sprint 4: Aslab, Keanggotaan Lab, Denda, dan Pembayaran
 
 Dokumen acuan programmer dan dasar SRS v4. Pemilik: Elang (PM). Perubahan isi kontrak (tipe, rules, API) dari programmer
-lewat PR terpisah yang disetujui PM. Status: **draft T0**, rules belum di-deploy.
+lewat PR terpisah yang disetujui PM. Status: **T0 selesai** (26 Nov 2026): PR #1 dan #2 di-merge, seed `--apply` dijalankan, rules di-deploy, backend aktif di https://rawuh-ppk.vercel.app. Rumusan resmi kebutuhan ada di `docs/SRS.md` v4.0.
 
 Berkas kode kontrak: `src/types/index.ts`, `src/types/bulk.ts`, `src/types/api.ts`, `src/constants/denda.ts`,
 `firestore.rules`, `server/lib/contract.ts` (salinan untuk server, **wajib sinkron**).
@@ -134,35 +134,37 @@ Aturan:
 
 | Tahap | Ibrahim (A) | Dhimas (B) |
 | --- | --- | --- |
-| **T0** kontrak (PR ini) | - | - |
-| **T1** | Role aslab + routing `/aslab`, CRUD lab, pengaturan toleransi | `fines/generate`, tutup sesi memicu generate, daftar tagihan praktikan |
-| **T2** | 3 bulk insert + layar review generik, pindah kelola lab | `payments/create`, webhook, Snap |
-| **T3** | Dashboard aslab | Notifikasi N7–N9, riwayat bayar |
-| **T4** | Finalisasi UI | Finalisasi UI |
+| **T0** fondasi | - | Dev build dari `main` setelah PR #2 (selesai 26 Nov) |
+| **T1** | FR-60 role & routing Aslab, FR-61 CRUD lab (pindah dari asisten), FR-62 grace period | FR-72/FR-73 `fines/generate` + tutup sesi memicu denda, FR-74 daftar tagihan, FR-71 pembatasan Asprak |
+| **T2** | FR-66 template, FR-67 komponen review generik, FR-63/64/65 bulk & single insert, FR-68 pindah | FR-75 `payments/create` + Snap, FR-76 webhook, perubahan FR lama ke keanggotaan lab |
+| **T3** | FR-69, FR-70 dashboard | FR-77 notifikasi N7–N9, FR-78 riwayat; `eas.json` preview + `EXPO_PUBLIC_API_BASE_URL` |
+| **T4** | NFR-19 layar Aslab, `DESIGN.md` | NFR-19 layar praktikan/Asprak, APK preview untuk demo |
 
 Kode FR (ringkas; rumusan resmi masuk SRS v4):
 
 | FR | Pemilik | Ringkasan |
 | --- | --- | --- |
-| FR-60 | Ibrahim | Role aslab: login, routing ke `/aslab`, terikat mata kuliah |
-| FR-61 | Ibrahim | CRUD lab per mata kuliah (nama, lokasi, radius) oleh aslab |
-| FR-62 | Ibrahim | Pengaturan `graceMinutes` per lab (0..60) |
-| FR-63 | Ibrahim | Bulk insert lab dari CSV |
-| FR-64 | Ibrahim | Bulk insert praktikan ke lab dari CSV (email) |
-| FR-65 | Ibrahim | Bulk insert Asprak ke lab dari CSV (email) |
-| FR-66 | Ibrahim | Layar review generik: edit sel, terima/tolak baris, terima semua yang valid, kirim |
-| FR-67 | Ibrahim | Template CSV per jenis dan peringatan "akun belum terdaftar" |
-| FR-68 | Ibrahim | Layar kelola lab dipindah dari asisten ke aslab |
-| FR-69 | Ibrahim | Dashboard aslab: kehadiran dan denda per lab/mata kuliah |
-| FR-70 | Ibrahim | Finalisasi UI aslab dan bulk (T4) |
-| FR-71 | Dhimas | Asprak hanya mengelola sesi di lab tempat emailnya terdaftar; hak tulis lab dicabut dari Asprak |
-| FR-72 | Dhimas | Sesi/presensi/izin praktikan lewat keanggotaan lab (query per `labId`) |
-| FR-73 | Dhimas | Tutup sesi membuat tagihan denda (`/api/fines/generate`) |
+| FR-60 | Ibrahim | Role aslab: login dari akun seed, routing ke `/aslab`, terikat mata kuliah |
+| FR-61 | Ibrahim | CRUD lab per mata kuliah (nama, gedung, koordinat, radius); layar kelola lab dipindah dari asisten ke aslab |
+| FR-62 | Ibrahim | Pengaturan `graceMinutes` per lab (0..60, bawaan 15) |
+| FR-63 | Ibrahim | Single & bulk insert lab (CSV) per mata kuliah |
+| FR-64 | Ibrahim | Single & bulk insert praktikan ke lab (email) |
+| FR-65 | Ibrahim | Single & bulk insert Asprak ke lab (email) |
+| FR-66 | Ibrahim | Template CSV yang dapat diunduh per jenis (3 bulk insert terpisah) |
+| FR-67 | Ibrahim | Layar review generik: terima/tolak, ubah, lengkapi, terima semua yang valid, peringatan "akun belum terdaftar" |
+| FR-68 | Ibrahim | Pindah praktikan dan Asprak antar lab (jadwal tidak ikut pindah) |
+| FR-69 | Ibrahim | Dashboard: jumlah lab & praktikan, status per lab, lokasi & waktu, jadwal berlangsung & akan datang |
+| FR-70 | Ibrahim | Dashboard: riwayat kegiatan & riwayat keuangan denda + filter hari/minggu/bulan |
+| FR-71 | Dhimas | Asprak hanya mengelola lab/jadwal/sesi tempat emailnya terdaftar; tanpa kewenangan distribusi & konfigurasi lab |
+| FR-72 | Dhimas | Penentuan keterlambatan dengan grace period saat sesi ditutup |
+| FR-73 | Dhimas | Tagihan denda: nominal tetap, satu per kejadian, tertaut praktikan/sesi/presensi; izin bebas denda; bayar tidak ubah kehadiran |
 | FR-74 | Dhimas | Daftar dan detail tagihan praktikan |
-| FR-75 | Dhimas | Bayar denda lewat Midtrans Snap (`/api/payments/create`) |
-| FR-76 | Dhimas | Webhook Midtrans memperbarui pembayaran dan tagihan (idempoten) |
+| FR-75 | Dhimas | Bayar lewat backend (`/api/payments/create`) → Midtrans Snap Sandbox |
+| FR-76 | Dhimas | Webhook terverifikasi memperbarui pembayaran & tagihan (idempoten) |
 | FR-77 | Dhimas | Notifikasi N7–N9 dan navigasi ke detail tagihan |
-| FR-78 | Dhimas | Riwayat pembayaran dan finalisasi UI (T4) |
+| FR-78 | Dhimas | Riwayat pembayaran persisten |
+
+Perubahan FR lama karena keanggotaan lab (FR-07/32/33/35/47/51, pendaftaran tanpa kelas) dikerjakan Dhimas; finalisasi UI dicatat sebagai NFR-19. Rincian di SRS v4.0 §4.1 dan §7.
 
 ## 8. Daftar TRANSISI-SPRINT4 (bereskan sebelum gladi)
 
