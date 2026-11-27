@@ -12,6 +12,7 @@ import { PRESSED_OPACITY } from '@/components/ui/pressable';
 import { Screen } from '@/components/ui/Screen';
 import { SyncErrorState } from '@/components/ui/SyncErrorState';
 import { useSyncRetry } from '@/features/asisten/useSyncRetry';
+import { TagihanShortcut } from '@/features/praktikan/TagihanShortcut';
 import {
   useAppStore,
   useAttendanceByUser,
@@ -21,6 +22,11 @@ import {
   useSessionsForUser,
   useSyncState,
 } from '@/store/appStore';
+import {
+  useBills,
+  useBillsSyncState,
+  useUnpaidBillsCount,
+} from '@/store/dendaStore';
 import { colors } from '@/theme/colors';
 import { layout, radius, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -46,6 +52,9 @@ export default function JadwalScreen() {
 
   const sessionsSync = useSyncState('sessions');
   const sessionsRetry = useSyncRetry(JADWAL_SYNC_KEYS);
+  const bills = useBills();
+  const billsSync = useBillsSyncState();
+  const unpaidBillsCount = useUnpaidBillsCount();
   const syncError = sessionsSync === 'error';
   const loadingInitial = sessionsSync === 'loading' && sessions.length === 0;
 
@@ -170,6 +179,13 @@ export default function JadwalScreen() {
                   supportingInfo="Laboratorium Komputer"
                   actionLabel="Keluar"
                   onAction={handleLogout}
+                />
+
+                <TagihanShortcut
+                  unpaidCount={unpaidBillsCount}
+                  totalCount={bills.length}
+                  syncStatus={billsSync}
+                  onPress={() => router.push('/praktikan/tagihan')}
                 />
 
                 {sessionsRetry.visible ? (
