@@ -31,6 +31,7 @@ import {
   useSessionById,
   useSyncState,
 } from '@/store/appStore';
+import { useDendaStore, useFineGenerationState } from '@/store/dendaStore';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -65,6 +66,19 @@ const SESSIONS_SYNC_KEYS = ['sessions'] as const;
 // Rekap dihitung dari presensi, izin, dan daftar praktikan; ketiganya listener terpisah.
 const REKAP_SYNC_KEYS = ['attendances', 'izin', 'users'] as const;
 
+const FINE_FAILED_MESSAGE = 'Sesi ditutup, tetapi denda belum dibuat. Coba lagi.';
+
+function formatFineResultMessage(created: number, skipped: number, fromClose: boolean): string {
+  const prefix = fromClose ? 'Sesi ditutup. ' : '';
+  if (created > 0) {
+    return `${prefix}${created} tagihan denda dibuat.`;
+  }
+  if (skipped > 0) {
+    return `${prefix}Tagihan denda sudah dibuat sebelumnya (${skipped} tagihan).`;
+  }
+  return `${prefix}Tidak ada praktikan yang terlambat.`;
+}
+
 const SUCCESS_MESSAGE: Record<StatusAction, string> = {
   open: 'Sesi dibuka',
   close: 'Sesi ditutup',
@@ -94,6 +108,8 @@ export default function AsistenDetailSesiScreen() {
   const openSession = useAppStore((state) => state.openSession);
   const closeSession = useAppStore((state) => state.closeSession);
   const deleteSession = useAppStore((state) => state.deleteSession);
+  const generateFines = useDendaStore((state) => state.generateFines);
+  const fineState = useFineGenerationState(sessionId);
 
   const [sheet, setSheet] = useState<SheetState | null>(null);
   // Sheet tetap terpasang sepanjang animasi tutup; aksi terakhir dipertahankan agar judul
@@ -188,6 +204,18 @@ export default function AsistenDetailSesiScreen() {
     setSheet(null);
   };
 
+  const runGenerateFines = async (fromClose: boolean) => {
+    const fineRes = await generateFines(session.id);
+    if (fineRes.ok) {
+      setFeedback({
+        tone: 'success',
+        message: formatFineResultMessage(fineRes.data.created, fineRes.data.skipped, fromClose),
+      });
+    } else {
+      setFeedback({ tone: 'danger', message: FINE_FAILED_MESSAGE });
+    }
+  };
+
   const handleStatusConfirm = async () => {
     if (pendingRef.current) return;
     const action = statusAction;
@@ -201,13 +229,23 @@ export default function AsistenDetailSesiScreen() {
     pendingRef.current = false;
     setPending(false);
     setSheet(null);
-    // Transisi yang sudah tidak berlaku datang sebagai CONFLICT dari pra-cek store, atau
-    // ditolak rules sebelum store diperbarui; keduanya menjadi STATUS_CHANGED_MESSAGE.
-    setFeedback(
-      res.ok
-        ? { tone: 'success', message: SUCCESS_MESSAGE[action] }
-        : { tone: 'danger', message: failureMessage(session.id, fromStatus, res.code, 'status') },
-    );
+
+    if (!res.ok) {
+      // Transisi yang sudah tidak berlaku datang sebagai CONFLICT dari pra-cek store, atau
+      // ditolak rules sebelum store diperbarui; keduanya menjadi STATUS_CHANGED_MESSAGE.
+      setFeedback({
+        tone: 'danger',
+        message: failureMessage(session.id, fromStatus, res.code, 'status'),
+      });
+      return;
+    }
+
+    if (action === 'close') {
+      await runGenerateFines(true);
+      return;
+    }
+
+    setFeedback({ tone: 'success', message: SUCCESS_MESSAGE[action] });
   };
 
   const handleDeleteConfirm = async () => {
@@ -274,7 +312,25 @@ export default function AsistenDetailSesiScreen() {
           ) : null}
 
           {session.status === 'closed' ? (
-            feedback ? null : <Banner tone="info" message="Sesi sudah ditutup." />
+            <View style={styles.actionGroup}>
+              {fineState.status === 'loading' ? (
+                <Banner tone="info" message="Sesi ditutup. Sedang memproses tagihan denda…" />
+              ) : fineState.status === 'failed' ? (
+                !feedback || feedback.message !== FINE_FAILED_MESSAGE ? (
+                  <Banner tone="danger" message={FINE_FAILED_MESSAGE} />
+                ) : null
+              ) : feedback ? null : (
+                <Banner tone="info" message="Sesi sudah ditutup." />
+              )}
+              <Button
+                label="Buat denda"
+                variant={fineState.status === 'failed' ? 'primary' : 'secondary'}
+                loading={fineState.status === 'loading'}
+                disabled={!isOnline}
+                onPress={() => void runGenerateFines(false)}
+              />
+              {isOnline ? null : <Text style={styles.actionHint}>{OFFLINE_ACTION_HINT}</Text>}
+            </View>
           ) : (
             <View style={styles.actionGroup}>
               {session.status === 'scheduled' ? (
