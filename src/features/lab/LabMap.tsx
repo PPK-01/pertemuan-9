@@ -25,6 +25,7 @@ import {
   useIsOnline,
   useLabActivity,
   useLabs,
+  useLabsForAsprak,
   useLocation,
   useWatchPosition,
 } from '@/store/appStore';
@@ -49,7 +50,9 @@ export function LabMap({ role = 'praktikan' }: LabMapProps) {
   const [isFocused, setIsFocused] = useState(true);
   useWatchPosition(isFocused);
 
-  const labs = useLabs();
+  const allLabs = useLabs();
+  const asprakLabs = useLabsForAsprak();
+  const labs = role === 'asisten' ? asprakLabs : allLabs;
   const location = useLocation();
   const isOnline = useIsOnline();
 
@@ -75,14 +78,15 @@ export function LabMap({ role = 'praktikan' }: LabMapProps) {
   );
 
   const labsWithOpenSession = useMemo(() => {
+    const allowedLabIds = new Set(labs.map((l) => l.id));
     const openSet = new Set<string>();
     for (const s of sessions) {
-      if (s.status === 'open' && s.labId) {
+      if (s.status === 'open' && s.labId && allowedLabIds.has(s.labId)) {
         openSet.add(s.labId);
       }
     }
     return openSet;
-  }, [sessions]);
+  }, [sessions, labs]);
 
   const selectedLab = useMemo(() => {
     if (selectedLabId) {

@@ -22,7 +22,6 @@ import type { SessionFilter } from '@/features/asisten/sessionFilterLabels';
 import { IzinShortcut } from '@/features/asisten/IzinShortcut';
 import { KelasShortcut } from '@/features/asisten/KelasShortcut';
 import { KeluarSheet } from '@/features/asisten/KeluarSheet';
-import { LabShortcut } from '@/features/asisten/LabShortcut';
 import { PetaShortcut } from '@/features/asisten/PetaShortcut';
 import { SessionListItem } from '@/features/asisten/SessionListItem';
 import { useSyncRetry } from '@/features/asisten/useSyncRetry';
@@ -58,7 +57,7 @@ const PLUS_ICON_SIZE = 20;
 const PLUS_STROKE_LENGTH = 14;
 const PLUS_STROKE_WIDTH = 2.5;
 
-const SESSIONS_SYNC_KEYS = ['sessions'] as const;
+const SESSIONS_SYNC_KEYS = ['sessions', 'labs'] as const;
 // Badge pintasan Izin bergantung pada listener izin.
 const IZIN_SYNC_KEYS = ['izin'] as const;
 
@@ -151,7 +150,8 @@ export default function AsistenHomeScreen() {
   // 'idle' berarti listener belum dipasang. Data yang sudah ada tetap ditampilkan (FR-29),
   // jadi status muat hanya menggantikan daftar yang masih kosong.
   const loadingInitial =
-    (sessionsSync === 'idle' || sessionsSync === 'loading') && sessions.length === 0;
+    (sessionsSync === 'idle' || sessionsSync === 'loading' || isLabsLoading(labsSync)) &&
+    sessions.length === 0;
   const syncError = sessionsRetry.visible;
 
   const empty = SESSION_FILTER_EMPTY[filter];
@@ -185,7 +185,7 @@ export default function AsistenHomeScreen() {
                 {currentUser ? (
                   <IdentityCard
                     name={currentUser.name}
-                    keyInfo="Asisten"
+                    keyInfo="Asprak"
                     supportingInfo="Laboratorium Komputer"
                     actionLabel="Keluar"
                     onAction={() => setKeluarVisible(true)}
@@ -204,12 +204,6 @@ export default function AsistenHomeScreen() {
                   </View>
                   <View style={styles.shortcutItem}>
                     <KelasShortcut onPress={() => router.push('/asisten/kelas')} />
-                  </View>
-                </View>
-
-                <View style={styles.shortcutRow}>
-                  <View style={styles.shortcutItem}>
-                    <LabShortcut onPress={() => router.push('/asisten/lab')} />
                   </View>
                   <View style={styles.shortcutItem}>
                     <PetaShortcut onPress={() => router.push('/asisten/peta')} />

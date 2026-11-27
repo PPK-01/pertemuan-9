@@ -20,6 +20,7 @@ import {
   useIsOnline,
   useLabActivity,
   useLabs,
+  useLabsForAsprak,
   useLocation,
   useWatchPosition,
 } from '@/store/appStore';
@@ -41,7 +42,9 @@ export function LabMap({ role = 'praktikan' }: LabMapProps) {
   const [isFocused, setIsFocused] = useState(true);
   useWatchPosition(isFocused);
 
-  const labs = useLabs();
+  const allLabs = useLabs();
+  const asprakLabs = useLabsForAsprak();
+  const labs = role === 'asisten' ? asprakLabs : allLabs;
   const location = useLocation();
   const isOnline = useIsOnline();
 

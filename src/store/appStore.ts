@@ -25,8 +25,9 @@ import {
 } from '@/services/kelas';
 import {
   addLab as svcAddLab,
-  updateLab as svcUpdateLab,
   deleteLab as svcDeleteLab,
+  isAsprakOfLab,
+  updateLab as svcUpdateLab,
 } from '@/services/labs';
 import {
   distanceM,
@@ -222,6 +223,25 @@ let locationEpoch = 0;
 // uid yang registrasi perangkatnya sedang berjalan; mencegah panggilan ganda untuk uid yang sama.
 const registeringDeviceUids = new Set<string>();
 
+function checkAsprakLabAccess(
+  state: Pick<AppStoreState, 'currentUser' | 'labs' | 'sync'>,
+  labId: string | undefined,
+): Result | null {
+  const user = state.currentUser;
+  if (!user || user.role !== 'asisten' || state.sync.labs !== 'ready') {
+    return null;
+  }
+  const lab = labId ? state.labs.find((l) => l.id === labId) : undefined;
+  if (!lab || !isAsprakOfLab(lab, user.email)) {
+    return {
+      ok: false,
+      code: 'PERMISSION_DENIED',
+      message: 'Kamu tidak terdaftar sebagai Asprak di laboratorium ini.',
+    };
+  }
+  return null;
+}
+
 export const useAppStore = create<AppStoreState>()((set, get) => ({
   authStatus: 'loading',
   currentUser: null,
@@ -383,6 +403,10 @@ export const useAppStore = create<AppStoreState>()((set, get) => ({
   newSessionId: () => svcNewSessionId(),
 
   createSession: async (input, options) => {
+    const accessErr = checkAsprakLabAccess(get(), input.labId);
+    if (accessErr) {
+      return accessErr as Result<Session>;
+    }
     // C-2: Sesi dibuat dengan id final Firestore yang konsisten sejak awal. Tanpa options.id,
     // service membuat id baru seperti sebelumnya.
     const id = options?.id;
@@ -407,6 +431,12 @@ export const useAppStore = create<AppStoreState>()((set, get) => ({
 
   updateSession: async (id, patch) => {
     const oldSession = get().sessions.find((s) => s.id === id);
+    const currentAccessErr = oldSession ? checkAsprakLabAccess(get(), oldSession.labId) : null;
+    if (currentAccessErr) return currentAccessErr;
+    if (patch.labId !== undefined) {
+      const targetAccessErr = checkAsprakLabAccess(get(), patch.labId);
+      if (targetAccessErr) return targetAccessErr;
+    }
     const labChanged =
       oldSession &&
       oldSession.status !== 'closed' &&
@@ -443,12 +473,17 @@ export const useAppStore = create<AppStoreState>()((set, get) => ({
   },
 
   deleteSession: async (id) => {
+    const session = get().sessions.find((s) => s.id === id);
+    const accessErr = session ? checkAsprakLabAccess(get(), session.labId) : null;
+    if (accessErr) return accessErr;
     return withWriteGuard(() => svcDeleteSession(id));
   },
 
   openSession: async (id) => {
     // C-5: Pra-cek transisi status sesi terkini di store
     const session = get().sessions.find((s) => s.id === id);
+    const accessErr = session ? checkAsprakLabAccess(get(), session.labId) : null;
+    if (accessErr) return accessErr;
     if (session && session.status !== 'scheduled') {
       return {
         ok: false,
@@ -475,6 +510,8 @@ export const useAppStore = create<AppStoreState>()((set, get) => ({
   closeSession: async (id) => {
     // C-5: Pra-cek transisi status sesi terkini di store
     const session = get().sessions.find((s) => s.id === id);
+    const accessErr = session ? checkAsprakLabAccess(get(), session.labId) : null;
+    if (accessErr) return accessErr;
     if (session && session.status !== 'open') {
       return {
         ok: false,
@@ -970,10 +1007,15 @@ export function useSessionsForUser(userId: string): Session[] {
           : state.users.find((u) => u.id === userId);
       if (!user) return [];
 
-      const visible =
-        user.role === 'asisten'
-          ? state.sessions
-          : state.sessions.filter((s) => s.kelas === user.kelas);
+      let visible: Session[];
+      if (user.role === 'asisten') {
+        const allowedLabIds = new Set(
+          state.labs.filter((lab) => isAsprakOfLab(lab, user.email)).map((lab) => lab.id),
+        );
+        visible = state.sessions.filter((s) => Boolean(s.labId && allowedLabIds.has(s.labId)));
+      } else {
+        visible = state.sessions.filter((s) => s.kelas === user.kelas);
+      }
 
       return [...visible].sort((a, b) => a.startAt.localeCompare(b.startAt));
     }),
@@ -1117,6 +1159,18 @@ export function useIzinForAsisten(
   return useAppStore(
     useShallow((state) => {
       let list = state.izinList;
+      if (state.currentUser?.role === 'asisten') {
+        const userEmail = state.currentUser.email;
+        const allowedLabIds = new Set(
+          state.labs.filter((lab) => isAsprakOfLab(lab, userEmail)).map((lab) => lab.id),
+        );
+        const allowedSessionIds = new Set(
+          state.sessions
+            .filter((s) => Boolean(s.labId && allowedLabIds.has(s.labId)))
+            .map((s) => s.id),
+        );
+        list = list.filter((i) => allowedSessionIds.has(i.sessionId));
+      }
       if (filter === 'pending') {
         list = list.filter(
           (i) => i.status === 'pending_ai' || i.status === 'pending_review',
@@ -1138,6 +1192,17 @@ export async function fetchSessionCode(sessionId: string): Promise<string | null
 
 export function useLabs(): Lab[] {
   return useAppStore((state) => state.labs);
+}
+
+/** Daftar lab yang menjadi tanggung jawab Asprak saat ini (FR-71). */
+export function useLabsForAsprak(): Lab[] {
+  return useAppStore(
+    useShallow((state) => {
+      const user = state.currentUser;
+      if (!user || user.role !== 'asisten') return [];
+      return state.labs.filter((lab) => isAsprakOfLab(lab, user.email));
+    }),
+  );
 }
 
 export function useLabById(id: string | undefined): Lab | null {
