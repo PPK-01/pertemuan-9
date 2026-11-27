@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { SyncErrorState } from '@/components/ui/SyncErrorState';
 import { RiwayatItem } from '@/features/praktikan/RiwayatItem';
+import { TagihanShortcut } from '@/features/praktikan/TagihanShortcut';
 import { useSyncRetry } from '@/features/asisten/useSyncRetry';
 import {
   useAppStore,
@@ -18,6 +19,11 @@ import {
   useSessionsForUser,
   useSyncState,
 } from '@/store/appStore';
+import {
+  useBills,
+  useBillsSyncState,
+  useUnpaidBillsCount,
+} from '@/store/dendaStore';
 import { colors } from '@/theme/colors';
 import { radius, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -42,6 +48,9 @@ export default function RiwayatScreen() {
   const attendancesSync = useSyncState('attendances');
   const sessionsSync = useSyncState('sessions');
   const riwayatRetry = useSyncRetry(RIWAYAT_SYNC_KEYS);
+  const bills = useBills();
+  const billsSync = useBillsSyncState();
+  const unpaidBillsCount = useUnpaidBillsCount();
   const syncError = attendancesSync === 'error' || sessionsSync === 'error';
   const loadingInitial =
     (attendancesSync === 'loading' || sessionsSync === 'loading') && attendances.length === 0;
@@ -133,6 +142,13 @@ export default function RiwayatScreen() {
                     <Text style={styles.summaryLabel}>Izin Disetujui</Text>
                   </View>
                 </View>
+
+                <TagihanShortcut
+                  unpaidCount={unpaidBillsCount}
+                  totalCount={bills.length}
+                  syncStatus={billsSync}
+                  onPress={() => router.push('/praktikan/tagihan')}
+                />
               </View>
             }
             ListEmptyComponent={
