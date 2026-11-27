@@ -181,7 +181,7 @@ Kode aplikasi (Dhimas, kecuali dicatat lain):
 
 5. `listenSessions` memakai `where('kelas', '==', user.kelas)` -> pindah ke query per `labId` (satu listener per lab keanggotaan). Perlu cara mengetahui lab anggota: baca `labs` lalu saring `praktikanEmails`.
 6. Pendaftaran praktikan yang mewajibkan `kelas` (`src/app/(auth)/daftar.tsx`, `src/services/auth.ts`) -> hentikan.
-7. Klien masih menulis `kelas` pada presensi/izin; `Izin.kelas` bertipe wajib di `src/types/index.ts` -> jadikan opsional lewat PR kontrak.
+7. Klien masih menulis `kelas` pada presensi/izin; `Izin.kelas` bertipe wajib di `src/types/index.ts` -> jadikan opsional lewat PR kontrak. Bagian tipe sudah selesai (`Izin.kelas` opsional); sisanya (klien berhenti menulis `kelas` pada presensi/izin) dikerjakan Dhimas.
 8. Tipe `Lab` Sprint 4 (`mataKuliahId`, `praktikanEmails`, `asprakEmails`, `graceMinutes`) opsional -> wajibkan setelah seed `--apply` dan setelah semua lab punya field itu.
 9. Koleksi `kelasPraktikum` dan layar kelola kelas (Sprint 2) -> pensiun setelah `kelas` tidak dipakai (Ibrahim memindahkan/menghapus layarnya).
 10. Seed lama (`scripts/seed-firebase.js`, `scripts/seed-labs.js`) menulis lab tanpa field Sprint 4 dan tidak lolos rules baru bila dijalankan lewat klien -> sesuaikan atau pensiunkan.
