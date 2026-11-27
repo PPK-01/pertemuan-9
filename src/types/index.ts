@@ -253,7 +253,7 @@ export type Izin = {
   sessionId: string;
   userId: string;
   userName: string;
-  kelas: string;
+  kelas?: string; // data lama; sejak Sprint 4 keanggotaan lab yang menentukan (TRANSISI-SPRINT4)
   alasan: string;
   status: IzinStatus;
   ai?: AiResult;
