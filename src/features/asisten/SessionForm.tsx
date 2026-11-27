@@ -16,7 +16,13 @@ import type {
   SessionFormValues,
 } from '@/features/asisten/sessionFormValidation';
 import { useSyncRetry } from '@/features/asisten/useSyncRetry';
-import { useKelasList, useLabs, useSyncState } from '@/store/appStore';
+import {
+  useCurrentUser,
+  useKelasList,
+  useLabs,
+  useLabsForAsprak,
+  useSyncState,
+} from '@/store/appStore';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
@@ -152,7 +158,10 @@ export function SessionForm({
   const kelasSync = useSyncState('kelas');
   const kelasRetry = useSyncRetry(KELAS_SYNC_KEYS);
 
-  const labsList = useLabs();
+  const currentUser = useCurrentUser();
+  const allLabs = useLabs();
+  const asprakLabs = useLabsForAsprak();
+  const labsList = currentUser?.role === 'asisten' ? asprakLabs : allLabs;
   const labsSync = useSyncState('labs');
   const labsRetry = useSyncRetry(LABS_SYNC_KEYS);
 
@@ -248,7 +257,9 @@ export function SessionForm({
       ? 'Memuat daftar laboratorium…'
       : labsSync === 'error'
         ? 'Daftar laboratorium belum termuat.'
-        : 'Belum ada laboratorium.';
+        : currentUser?.role === 'asisten'
+          ? 'Belum ada laboratorium yang menjadi tanggung jawabmu. Hubungi Aslab.'
+          : 'Belum ada laboratorium.';
 
   return (
     <View style={styles.form}>

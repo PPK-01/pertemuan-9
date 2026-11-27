@@ -20,6 +20,7 @@ import {
   useAppStore,
   useCurrentUser,
   useIsOnline,
+  useLabsForAsprak,
   useSessionById,
   useSyncState,
 } from '@/store/appStore';
@@ -51,6 +52,8 @@ export default function AsistenBuatSesiScreen() {
   const isOnline = useIsOnline();
   const session = useSessionById(editId ?? '');
   const sessionsSync = useSyncState('sessions');
+  const labsSync = useSyncState('labs');
+  const asprakLabs = useLabsForAsprak();
   const sessionsRetry = useSyncRetry(SESSIONS_SYNC_KEYS);
   const createSession = useAppStore((state) => state.createSession);
   const newSessionId = useAppStore((state) => state.newSessionId);
@@ -133,7 +136,6 @@ export default function AsistenBuatSesiScreen() {
       <SessionForm
         onSubmit={handleCreate}
         onManageKelas={() => router.push('/asisten/kelas')}
-        onManageLab={() => router.push('/asisten/lab')}
         submitting={submitting}
         submitError={submitError}
         disabledHint={disabledHint}
@@ -158,6 +160,17 @@ export default function AsistenBuatSesiScreen() {
       <EmptyState
         title="Sesi tidak ditemukan"
         message="Sesi mungkin sudah dihapus atau tautan tidak valid."
+        action={{ label: 'Kembali ke daftar sesi', onPress: goToList }}
+      />
+    );
+  } else if (
+    labsSync === 'ready' &&
+    (!session.labId || !asprakLabs.some((lab) => lab.id === session.labId))
+  ) {
+    body = (
+      <EmptyState
+        title="Tidak memiliki akses"
+        message="Kamu tidak terdaftar sebagai Asprak pada laboratorium sesi ini."
         action={{ label: 'Kembali ke daftar sesi', onPress: goToList }}
       />
     );
@@ -187,7 +200,6 @@ export default function AsistenBuatSesiScreen() {
           lockedHint={OPEN_LOCKED_HINT}
           onSubmit={(input) => handleUpdate(session, input)}
           onManageKelas={() => router.push('/asisten/kelas')}
-          onManageLab={() => router.push('/asisten/lab')}
           submitLabel="Simpan perubahan"
           submitting={submitting}
           submitError={submitError}

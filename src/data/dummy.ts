@@ -37,6 +37,10 @@ export const dummyLabs: Lab[] = [
     createdAt: '2026-11-18T00:00:00.000Z',
     updatedBy: 'usr-asisten-1',
     updatedAt: '2026-11-18T00:00:00.000Z',
+    mataKuliahId: 'mk-basis-data',
+    praktikanEmails: ['bagas@rawuh.ac.id', 'citra@rawuh.ac.id', 'fajar@rawuh.ac.id'],
+    asprakEmails: ['dina@rawuh.ac.id'],
+    graceMinutes: 15,
   },
   {
     id: 'lab-2',
@@ -49,6 +53,10 @@ export const dummyLabs: Lab[] = [
     createdAt: '2026-11-18T00:00:00.000Z',
     updatedBy: 'usr-asisten-1',
     updatedAt: '2026-11-18T00:00:00.000Z',
+    mataKuliahId: 'mk-pemrograman-mobile',
+    praktikanEmails: ['bagas@rawuh.ac.id', 'citra@rawuh.ac.id', 'fajar@rawuh.ac.id'],
+    asprakEmails: ['raka@rawuh.ac.id'],
+    graceMinutes: 15,
   },
   {
     id: 'lab-3',
@@ -61,6 +69,10 @@ export const dummyLabs: Lab[] = [
     createdAt: '2026-11-18T00:00:00.000Z',
     updatedBy: 'usr-asisten-1',
     updatedAt: '2026-11-18T00:00:00.000Z',
+    mataKuliahId: 'mk-basis-data',
+    praktikanEmails: ['dani@rawuh.ac.id', 'eka@rawuh.ac.id', 'gita@rawuh.ac.id'],
+    asprakEmails: ['dina@rawuh.ac.id'],
+    graceMinutes: 15,
   },
   {
     id: 'lab-4',
@@ -73,6 +85,10 @@ export const dummyLabs: Lab[] = [
     createdAt: '2026-11-18T00:00:00.000Z',
     updatedBy: 'usr-asisten-2',
     updatedAt: '2026-11-18T00:00:00.000Z',
+    mataKuliahId: 'mk-pemrograman-mobile',
+    praktikanEmails: [],
+    asprakEmails: ['raka@rawuh.ac.id'],
+    graceMinutes: 15,
   },
   {
     id: 'lab-5',
@@ -85,6 +101,10 @@ export const dummyLabs: Lab[] = [
     createdAt: '2026-11-18T00:00:00.000Z',
     updatedBy: 'usr-asisten-2',
     updatedAt: '2026-11-18T00:00:00.000Z',
+    mataKuliahId: 'mk-pemrograman-mobile',
+    praktikanEmails: [],
+    asprakEmails: ['raka@rawuh.ac.id'],
+    graceMinutes: 15,
   },
 ];
 

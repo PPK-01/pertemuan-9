@@ -17,6 +17,7 @@ import { devWarn } from './devLog';
 import { mapFirebaseError } from './errors';
 import { inMemory, getInMemoryLabs, getInMemorySessions } from './inMemoryStore';
 import { MAX_RADIUS_M, MIN_RADIUS_M } from '@/constants/location';
+import { normalizeEmail } from '@/constants/denda';
 import type {
   CreateLabInput,
   Lab,
@@ -41,7 +42,24 @@ function notifyFallbackLabsListeners() {
   });
 }
 
+function toStringEmailList(raw: unknown): string[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return raw.filter((item): item is string => typeof item === 'string').map(normalizeEmail);
+}
+
+/** Memeriksa apakah email pengguna terdaftar sebagai Asprak pada lab tertentu. */
+export function isAsprakOfLab(
+  lab: Pick<Lab, 'asprakEmails'>,
+  email?: string | null,
+): boolean {
+  if (!email) return false;
+  const normalized = normalizeEmail(email);
+  return (lab.asprakEmails ?? []).some((e) => normalizeEmail(e) === normalized);
+}
+
 function toLab(id: string, data: DocumentData): Lab {
+  const praktikanEmails = toStringEmailList(data.praktikanEmails);
+  const asprakEmails = toStringEmailList(data.asprakEmails);
   return {
     id,
     nama: data.nama,
@@ -59,6 +77,10 @@ function toLab(id: string, data: DocumentData): Lab {
       typeof data.updatedAt?.toDate === 'function'
         ? data.updatedAt.toDate().toISOString()
         : data.updatedAt ?? new Date().toISOString(),
+    ...(typeof data.mataKuliahId === 'string' ? { mataKuliahId: data.mataKuliahId } : {}),
+    ...(praktikanEmails !== undefined ? { praktikanEmails } : {}),
+    ...(asprakEmails !== undefined ? { asprakEmails } : {}),
+    ...(typeof data.graceMinutes === 'number' ? { graceMinutes: data.graceMinutes } : {}),
   };
 }
 
