@@ -53,6 +53,13 @@ export async function getUserProfile(uid: string): Promise<GetUserProfileResult>
         email: data.email,
         role: data.role,
         kelas: data.kelas,
+        ...(Array.isArray(data.mataKuliahIds)
+          ? {
+              mataKuliahIds: data.mataKuliahIds.filter(
+                (mkId): mkId is string => typeof mkId === 'string',
+              ),
+            }
+          : {}),
       },
     };
   } catch (error) {
