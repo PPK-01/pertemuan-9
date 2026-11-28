@@ -1,24 +1,29 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
+import { useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AppBar } from '@/components/ui/AppBar';
 import { Banner } from '@/components/ui/Banner';
+import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { SyncErrorState } from '@/components/ui/SyncErrorState';
+import { OFFLINE_ACTION_HINT } from '@/features/asisten/writeErrorMessage';
 import {
   BILL_STATUS_LABEL,
   formatRupiah,
   resolveBillDisplay,
 } from '@/features/praktikan/billFormat';
 import { BillStatusBadge } from '@/features/praktikan/BillStatusBadge';
-import { useAppStore, useLabs } from '@/store/appStore';
+import { useAppStore, useIsOnline, useLabs } from '@/store/appStore';
 import {
   useBillById,
   useBillsSyncState,
   useDendaStore,
+  useIsPayingBill,
   useMataKuliahMap,
 } from '@/store/dendaStore';
 import { colors } from '@/theme/colors';
@@ -53,9 +58,15 @@ export default function PraktikanDetailTagihanScreen() {
   const bill = useBillById(billId);
   const billsSync = useBillsSyncState();
   const retryBillsSync = useDendaStore((state) => state.retryBillsSync);
+  const createPayment = useDendaStore((state) => state.createPayment);
+  const isPaying = useIsPayingBill(billId);
+  const isOnline = useIsOnline();
   const sessions = useAppStore((state) => state.sessions);
   const labs = useLabs();
   const mataKuliahById = useMataKuliahMap();
+
+  const [paymentError, setPaymentError] = useState<{ id: number; message: string } | null>(null);
+  const payingRef = useRef(false);
 
   if (!bill) {
     const loading = billsSync === 'idle' || billsSync === 'loading';
@@ -90,6 +101,36 @@ export default function PraktikanDetailTagihanScreen() {
   const mk = mataKuliahById[bill.mataKuliahId];
   const display = resolveBillDisplay(bill, session, lab, mk);
   const nominalText = formatRupiah(bill.amount);
+  const canPay = bill.status === 'unpaid' || bill.status === 'failed';
+
+  const handlePay = async () => {
+    if (payingRef.current || !canPay || !isOnline) return;
+    payingRef.current = true;
+    setPaymentError(null);
+
+    try {
+      const res = await createPayment(bill.id);
+      if (!res.ok) {
+        const message =
+          res.code === 'CONFLICT'
+            ? res.message
+            : 'Pembayaran belum bisa dimulai. Periksa koneksi lalu coba lagi.';
+        setPaymentError((prev) => ({ id: (prev?.id ?? 0) + 1, message }));
+        return;
+      }
+
+      try {
+        await WebBrowser.openBrowserAsync(res.data.redirectUrl);
+      } catch {
+        setPaymentError((prev) => ({
+          id: (prev?.id ?? 0) + 1,
+          message: 'Halaman pembayaran gagal dibuka. Silakan coba lagi.',
+        }));
+      }
+    } finally {
+      payingRef.current = false;
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -117,7 +158,7 @@ export default function PraktikanDetailTagihanScreen() {
           {bill.status === 'pending' ? (
             <Banner
               tone="info"
-              message="Menunggu konfirmasi pembayaran dari Midtrans. Status akan diperbarui otomatis."
+              message="Menunggu konfirmasi pembayaran dari Midtrans."
             />
           ) : bill.status === 'success' ? (
             <Banner
@@ -129,6 +170,22 @@ export default function PraktikanDetailTagihanScreen() {
               tone="danger"
               message="Pembayaran belum berhasil. Silakan bayar ulang."
             />
+          ) : null}
+
+          {paymentError ? (
+            <Banner key={paymentError.id} tone="danger" message={paymentError.message} />
+          ) : null}
+
+          {canPay ? (
+            <View style={styles.paySection}>
+              <Button
+                label={bill.status === 'failed' ? 'Bayar ulang' : 'Bayar'}
+                onPress={() => void handlePay()}
+                loading={isPaying}
+                disabled={!isOnline}
+              />
+              {isOnline ? null : <Text style={styles.footerNote}>{OFFLINE_ACTION_HINT}</Text>}
+            </View>
           ) : null}
 
           <Card>
@@ -213,5 +270,8 @@ const styles = StyleSheet.create({
   footerNote: {
     ...typography.caption,
     color: colors.textMuted,
+  },
+  paySection: {
+    gap: spacing.sm,
   },
 });

@@ -7,9 +7,10 @@ import {
   generateFines as svcGenerateFines,
   listenBillsForPraktikan,
 } from '@/services/denda';
+import { createPayment as svcCreatePayment } from '@/services/payments';
 import type { SyncStatus } from '@/store/sync';
 import type { Bill, MataKuliah, Result, User } from '@/types';
-import type { GenerateFinesResponse } from '@/types/api';
+import type { CreatePaymentResponse, GenerateFinesResponse } from '@/types/api';
 
 export type FineGenStatus = 'idle' | 'loading' | 'success' | 'failed';
 
@@ -17,10 +18,12 @@ export type DendaStoreState = {
   fineStatusBySession: Record<string, FineGenStatus>;
   fineResultBySession: Record<string, GenerateFinesResponse | undefined>;
   fineErrorBySession: Record<string, string | undefined>;
+  payingByBill: Record<string, boolean>;
   bills: Bill[];
   billsSync: SyncStatus;
   mataKuliahById: Record<string, MataKuliah>;
   generateFines: (sessionId: string) => Promise<Result<GenerateFinesResponse>>;
+  createPayment: (billId: string) => Promise<Result<CreatePaymentResponse>>;
   startBillsSync: (user: User) => void;
   stopBillsSync: () => void;
   retryBillsSync: () => void;
@@ -45,6 +48,7 @@ export const useDendaStore = create<DendaStoreState>()((set, get) => ({
   fineStatusBySession: {},
   fineResultBySession: {},
   fineErrorBySession: {},
+  payingByBill: {},
   bills: [],
   billsSync: 'idle',
   mataKuliahById: {},
@@ -77,6 +81,28 @@ export const useDendaStore = create<DendaStoreState>()((set, get) => ({
       }));
     }
     return res;
+  },
+
+  createPayment: async (billId) => {
+    if (get().payingByBill[billId]) {
+      return {
+        ok: false,
+        code: 'CONFLICT',
+        message: 'Pembayaran sedang diproses.',
+      };
+    }
+
+    set((state) => ({
+      payingByBill: { ...state.payingByBill, [billId]: true },
+    }));
+
+    try {
+      return await svcCreatePayment(billId);
+    } finally {
+      set((state) => ({
+        payingByBill: { ...state.payingByBill, [billId]: false },
+      }));
+    }
   },
 
   startBillsSync: (user) => {
@@ -135,6 +161,7 @@ export const useDendaStore = create<DendaStoreState>()((set, get) => ({
       fineStatusBySession: {},
       fineResultBySession: {},
       fineErrorBySession: {},
+      payingByBill: {},
       bills: [],
       billsSync: 'idle',
       mataKuliahById: {},
@@ -201,4 +228,8 @@ export function useUnpaidBillsCount(): number {
     (state) =>
       state.bills.filter((b) => b.status === 'unpaid' || b.status === 'failed').length,
   );
+}
+
+export function useIsPayingBill(billId: string): boolean {
+  return useDendaStore((state) => Boolean(state.payingByBill[billId]));
 }
