@@ -9,9 +9,11 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import type { DocumentData } from 'firebase/firestore';
+import { normalizeEmail } from '@/constants/denda';
 import { db, isFirebaseReady } from './firebase';
 import { devWarn } from './devLog';
 import { mapFirebaseError } from './errors';
+import { isPraktikanOfLab } from './labs';
 import type { CreateSessionInput, Result, Session, User } from '@/types';
 import { createId, createSessionCode } from '@/utils/id';
 import { inMemory, getInMemoryLabs, getInMemorySessions } from './inMemoryStore';
@@ -65,11 +67,16 @@ export function listenSessions(
 ): () => void {
   if (!isFirebaseReady || !db) {
     const notify = () => {
-      const filtered =
-        user.role === 'asisten'
-          ? inMemory.sessions
-          : inMemory.sessions.filter((s) => s.kelas === user.kelas);
-      onData(filtered);
+      if (user.role === 'asisten' || user.role === 'aslab') {
+        onData(inMemory.sessions);
+        return;
+      }
+      const allowedLabIds = new Set(
+        inMemory.labs
+          .filter((lab) => isPraktikanOfLab(lab, user.email))
+          .map((lab) => lab.id),
+      );
+      onData(inMemory.sessions.filter((s) => Boolean(s.labId && allowedLabIds.has(s.labId))));
     };
     notify();
     fallbackSessionListeners.add(notify);
@@ -79,24 +86,99 @@ export function listenSessions(
   }
 
   const sessionsRef = collection(db, 'sessions');
-  const q =
-    user.role === 'asisten'
-      ? query(sessionsRef)
-      : query(sessionsRef, where('kelas', '==', user.kelas ?? ''));
+  if (user.role === 'asisten' || user.role === 'aslab') {
+    return onSnapshot(
+      query(sessionsRef),
+      (snapshot) => {
+        const list: Session[] = snapshot.docs.map((d) => toSession(d.id, d.data()));
+        onData(list);
+      },
+      (error) => {
+        devWarn('sessions', error);
+        if (onError) onError(error);
+      },
+    );
+  }
 
-  const unsubscribe = onSnapshot(
-    q,
-    (snapshot) => {
-      const list: Session[] = snapshot.docs.map((d) => toSession(d.id, d.data()));
-      onData(list);
+  // Praktikan: satu listener where('labId', '==', X) per lab keanggotaan (kontrak §2).
+  const firestore = db;
+  const sessionUnsubs = new Map<string, () => void>();
+  const sessionsByLab = new Map<string, Session[]>();
+  const initializedLabs = new Set<string>();
+
+  const emitMerged = () => {
+    const merged: Session[] = [];
+    for (const list of sessionsByLab.values()) {
+      merged.push(...list);
+    }
+    onData(merged);
+  };
+
+  const labsQuery = query(
+    collection(firestore, 'labs'),
+    where('praktikanEmails', 'array-contains', normalizeEmail(user.email)),
+  );
+
+  const labsUnsub = onSnapshot(
+    labsQuery,
+    (labsSnapshot) => {
+      const nextLabIds = new Set(labsSnapshot.docs.map((d) => d.id));
+
+      for (const [labId, unsub] of sessionUnsubs.entries()) {
+        if (!nextLabIds.has(labId)) {
+          unsub();
+          sessionUnsubs.delete(labId);
+          sessionsByLab.delete(labId);
+          initializedLabs.delete(labId);
+        }
+      }
+
+      if (nextLabIds.size === 0) {
+        onData([]);
+        return;
+      }
+
+      let addedNewListener = false;
+      for (const labId of nextLabIds) {
+        if (sessionUnsubs.has(labId)) continue;
+        addedNewListener = true;
+        const labSessionsQuery = query(sessionsRef, where('labId', '==', labId));
+        const unsub = onSnapshot(
+          labSessionsQuery,
+          (snapshot) => {
+            sessionsByLab.set(
+              labId,
+              snapshot.docs.map((d) => toSession(d.id, d.data())),
+            );
+            initializedLabs.add(labId);
+            emitMerged();
+          },
+          (error) => {
+            devWarn('sessions', error);
+            if (onError) onError(error);
+          },
+        );
+        sessionUnsubs.set(labId, unsub);
+      }
+
+      if (!addedNewListener && initializedLabs.size > 0) {
+        emitMerged();
+      }
     },
     (error) => {
-      devWarn('sessions', error);
+      devWarn('sessions-labs', error);
       if (onError) onError(error);
     },
   );
 
-  return unsubscribe;
+  return () => {
+    labsUnsub();
+    for (const unsub of sessionUnsubs.values()) {
+      unsub();
+    }
+    sessionUnsubs.clear();
+    sessionsByLab.clear();
+  };
 }
 
 export async function createSession(

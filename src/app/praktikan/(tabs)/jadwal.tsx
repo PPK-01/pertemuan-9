@@ -19,6 +19,7 @@ import {
   useCurrentUser,
   useIzinByUser,
   useLabs,
+  useLabsForPraktikan,
   useSessionsForUser,
   useSyncState,
 } from '@/store/appStore';
@@ -45,6 +46,7 @@ export default function JadwalScreen() {
   const attendances = useAttendanceByUser(userId);
   const izinList = useIzinByUser(userId);
   const labs = useLabs();
+  const memberLabs = useLabsForPraktikan();
   const labsLoading = isLabsLoading(useSyncState('labs'));
 
   // FR-03: lookup labId -> nama lab sekali per perubahan labs, bukan hook per baris.
@@ -175,7 +177,11 @@ export default function JadwalScreen() {
               <View style={styles.headerBlock}>
                 <IdentityCard
                   name={currentUser.name}
-                  keyInfo={currentUser.kelas ? `Kelas ${currentUser.kelas}` : 'Praktikan'}
+                  keyInfo={
+                    memberLabs.length > 0
+                      ? memberLabs.map((l) => l.nama).join(' · ')
+                      : 'Praktikan'
+                  }
                   supportingInfo="Laboratorium Komputer"
                   actionLabel="Keluar"
                   onAction={handleLogout}
@@ -215,7 +221,7 @@ export default function JadwalScreen() {
               ) : (
                 <EmptyState
                   title="Belum ada sesi"
-                  message={`Belum ada sesi praktikum yang dijadwalkan untuk Kelas ${currentUser.kelas ?? ''}.`}
+                  message="Belum ada sesi praktikum yang dijadwalkan di laboratorium tempatmu terdaftar."
                 />
               )
             }

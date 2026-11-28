@@ -24,6 +24,7 @@ import {
   useAttendanceByUser,
   useCurrentUser,
   useIzinByUser,
+  useLabsForPraktikan,
   useSessionsForUser,
 } from '@/store/appStore';
 import { colors } from '@/theme/colors';
@@ -38,6 +39,9 @@ export default function PraktikanProfilScreen() {
   const sessions = useSessionsForUser(userId);
   const attendances = useAttendanceByUser(userId);
   const izinList = useIzinByUser(userId);
+  const memberLabs = useLabsForPraktikan();
+  const memberLabLabel =
+    memberLabs.length > 0 ? memberLabs.map((l) => l.nama).join(', ') : 'Belum terdaftar di lab';
 
   const [keluarVisible, setKeluarVisible] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -194,7 +198,9 @@ export default function PraktikanProfilScreen() {
           {/* Kartu Identitas */}
           <IdentityCard
             name={currentUser.name}
-            keyInfo={currentUser.kelas ? `Kelas ${currentUser.kelas}` : 'Praktikan'}
+            keyInfo={
+              memberLabs.length > 0 ? memberLabs.map((l) => l.nama).join(' · ') : 'Praktikan'
+            }
             supportingInfo="Laboratorium Komputer"
             actionLabel="Keluar"
             onAction={() => setKeluarVisible(true)}
@@ -231,8 +237,8 @@ export default function PraktikanProfilScreen() {
                 <Text style={styles.infoValue}>{currentUser.email}</Text>
               </View>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Kelas Praktikum</Text>
-                <Text style={styles.infoValue}>Kelas {currentUser.kelas ?? '-'}</Text>
+                <Text style={styles.infoLabel}>Laboratorium</Text>
+                <Text style={styles.infoValue}>{memberLabLabel}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Peran Akun</Text>

@@ -11,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Screen } from '@/components/ui/Screen';
 import { ATTEND_FAIL_MESSAGE } from '@/features/praktikan/attendMessages';
+import { isPraktikanOfLab } from '@/services/labs';
 import {
   useAttendanceByUser,
   useCurrentUser,
@@ -38,8 +39,9 @@ export default function DetailSesiScreen() {
   const izinList = useIzinByUser(currentUser?.id ?? '');
   const existingIzin = izinList.find((item) => item.sessionId === sessionId);
 
+  const labsLoading = isLabsLoading(useSyncState('labs'));
   // FR-03: nama lab -> ruang (sesi lama) -> "Lab belum diatur"; '' bila lab belum tersinkron.
-  const labName = pickLabName(session?.labId, lab?.nama, isLabsLoading(useSyncState('labs')));
+  const labName = pickLabName(session?.labId, lab?.nama, labsLoading);
 
   if (!currentUser) {
     return (
@@ -71,8 +73,8 @@ export default function DetailSesiScreen() {
     );
   }
 
-  const isClassMismatch = currentUser.kelas !== session.kelas;
-  if (isClassMismatch) {
+  const isLabMismatch = !labsLoading && (!lab || !isPraktikanOfLab(lab, currentUser.email));
+  if (isLabMismatch) {
     return (
       <View style={styles.container}>
         <AppBar subtitle="Detail Sesi" canGoBack onGoBack={() => router.back()} />

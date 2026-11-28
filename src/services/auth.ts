@@ -38,7 +38,6 @@ export async function register(input: RegisterInput): Promise<Result<User>> {
       name: input.name.trim(),
       email: input.email.toLowerCase().trim(),
       role: input.role,
-      kelas: input.role === 'praktikan' ? input.kelas : undefined,
     };
 
     const updated = [...getFallbackUsers(), newUser];
@@ -63,9 +62,6 @@ export async function register(input: RegisterInput): Promise<Result<User>> {
       createdAt: serverTimestamp(),
     };
 
-    if (input.role === 'praktikan' && input.kelas) {
-      profileData.kelas = input.kelas;
-    }
     if (input.role === 'asisten' && input.inviteCode) {
       profileData.inviteCode = input.inviteCode.trim();
     }
@@ -96,7 +92,6 @@ export async function register(input: RegisterInput): Promise<Result<User>> {
       name: input.name.trim(),
       email: input.email.toLowerCase().trim(),
       role: input.role,
-      kelas: input.kelas,
     };
 
     return { ok: true, data: createdUser };

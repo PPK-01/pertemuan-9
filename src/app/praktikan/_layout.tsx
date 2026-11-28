@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Redirect, Stack } from 'expo-router';
-import { useCurrentUser } from '@/store/appStore';
+import { useAppStore, useCurrentUser } from '@/store/appStore';
 import { useDendaStore } from '@/store/dendaStore';
 import { colors } from '@/theme/colors';
 
@@ -10,19 +10,21 @@ export const unstable_settings = {
 
 export default function PraktikanLayout() {
   const currentUser = useCurrentUser();
+  const currentUserId = currentUser?.id;
   const startBillsSync = useDendaStore((state) => state.startBillsSync);
   const stopBillsSync = useDendaStore((state) => state.stopBillsSync);
 
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'praktikan') {
+    const user = useAppStore.getState().currentUser;
+    if (!user || user.role !== 'praktikan') {
       stopBillsSync();
       return;
     }
-    startBillsSync(currentUser);
+    startBillsSync(user);
     return () => {
       stopBillsSync();
     };
-  }, [currentUser, startBillsSync, stopBillsSync]);
+  }, [currentUserId, startBillsSync, stopBillsSync]);
 
   if (!currentUser || currentUser.role !== 'praktikan') {
     return <Redirect href="/(auth)/login" />;
