@@ -42,8 +42,15 @@ export function sendCaught(res: VercelResponse, err: unknown): void {
   sendError(res, 'INTERNAL', 'Terjadi kesalahan pada server.');
 }
 
-/** Mengembalikan true bila method cocok; bila tidak, sudah membalas 405 (+ header Allow). */
+/** Mengembalikan true bila method cocok; bila OPTIONS/tidak cocok, sudah membalas (+ header CORS). */
 export function allowMethod(req: VercelRequest, res: VercelResponse, method: 'GET' | 'POST'): boolean {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', `${method}, OPTIONS`);
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return false;
+  }
   if (req.method === method) return true;
   res.setHeader('Allow', method);
   sendError(res, 'METHOD_NOT_ALLOWED', `Gunakan method ${method}.`);
