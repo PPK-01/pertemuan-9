@@ -231,7 +231,7 @@ export function PresensiScreen() {
             syncRetry.visible ? null : (
               <EmptyState
                 title="Tidak Ada Sesi Hari Ini"
-                message="Belum ada sesi praktikum yang dijadwalkan untuk kelasmu hari ini."
+                message="Belum ada sesi praktikum yang dijadwalkan untuk labmu hari ini."
               />
             )
           ) : (
@@ -335,8 +335,8 @@ export function PresensiScreen() {
               <Text style={styles.sheetValue}>{activeSession.praktikum}</Text>
             </View>
             <View style={styles.sheetRow}>
-              <Text style={styles.sheetLabel}>Kelas</Text>
-              <Text style={styles.sheetValue}>{activeSession.kelas}</Text>
+              <Text style={styles.sheetLabel}>Topik</Text>
+              <Text style={styles.sheetValue}>{activeSession.topik}</Text>
             </View>
             <View style={styles.sheetRow}>
               <Text style={styles.sheetLabel}>Lab</Text>

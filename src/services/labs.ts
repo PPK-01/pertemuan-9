@@ -57,6 +57,16 @@ export function isAsprakOfLab(
   return (lab.asprakEmails ?? []).some((e) => normalizeEmail(e) === normalized);
 }
 
+/** Memeriksa apakah email pengguna terdaftar sebagai praktikan pada lab tertentu. */
+export function isPraktikanOfLab(
+  lab: Pick<Lab, 'praktikanEmails'>,
+  email?: string | null,
+): boolean {
+  if (!email) return false;
+  const normalized = normalizeEmail(email);
+  return (lab.praktikanEmails ?? []).some((e) => normalizeEmail(e) === normalized);
+}
+
 function toLab(id: string, data: DocumentData): Lab {
   const praktikanEmails = toStringEmailList(data.praktikanEmails);
   const asprakEmails = toStringEmailList(data.asprakEmails);

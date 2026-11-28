@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -22,23 +22,22 @@ import {
   validateName,
   validatePassword,
 } from '@/features/auth/authValidation';
-import { useAppStore, useKelasList } from '@/store/appStore';
+import { useAppStore } from '@/store/appStore';
 import { colors } from '@/theme/colors';
 import { radius, spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import type { Role } from '@/types';
+import { getHomeRouteForRole } from '@/utils/routes';
 
 export default function DaftarScreen() {
   const insets = useSafeAreaInsets();
   const register = useAppStore((state) => state.register);
-  const kelasList = useKelasList();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [role, setRole] = useState<Role>('praktikan');
-  const [selectedKelas, setSelectedKelas] = useState<string>('A');
   const [inviteCode, setInviteCode] = useState('');
 
   const [nameError, setNameError] = useState<string | undefined>();
@@ -48,14 +47,6 @@ export default function DaftarScreen() {
   const [inviteError, setInviteError] = useState<string | undefined>();
   const [generalError, setGeneralError] = useState<string | undefined>();
   const [submitting, setSubmitting] = useState(false);
-
-  // Ambil daftar kelas unik dari kelasPraktikum
-  const availableKelas = useMemo(() => {
-    const set = new Set<string>();
-    kelasList.forEach((k) => set.add(k.kelas));
-    const arr = Array.from(set);
-    return arr.length > 0 ? arr.sort() : ['A', 'B'];
-  }, [kelasList]);
 
   async function handleRegister() {
     setGeneralError(undefined);
@@ -103,18 +94,12 @@ export default function DaftarScreen() {
       email,
       password,
       role,
-      kelas: role === 'praktikan' ? selectedKelas : undefined,
       inviteCode: role === 'asisten' ? inviteCode : undefined,
     });
     setSubmitting(false);
 
     if (result.ok) {
-      const user = result.data;
-      if (user.role === 'asisten') {
-        router.replace('/asisten');
-      } else {
-        router.replace('/praktikan/jadwal');
-      }
+      router.replace(getHomeRouteForRole(result.data.role));
     } else {
       setGeneralError(result.message);
     }
@@ -187,7 +172,7 @@ export default function DaftarScreen() {
                       role === 'asisten' && styles.roleTabTextActive,
                     ]}
                   >
-                    Asisten Lab
+                    Asprak
                   </Text>
                 </Pressable>
               </View>
@@ -219,37 +204,9 @@ export default function DaftarScreen() {
                 error={emailError}
               />
 
-              {role === 'praktikan' ? (
-                <View style={styles.section}>
-                  <Text style={styles.label}>Pilih Kelas:</Text>
-                  <View style={styles.kelasRow}>
-                    {availableKelas.map((k) => {
-                      const isSelected = selectedKelas === k;
-                      return (
-                        <Pressable
-                          key={k}
-                          style={[
-                            styles.kelasPill,
-                            isSelected && styles.kelasPillActive,
-                          ]}
-                          onPress={() => setSelectedKelas(k)}
-                        >
-                          <Text
-                            style={[
-                              styles.kelasPillText,
-                              isSelected && styles.kelasPillTextActive,
-                            ]}
-                          >
-                            Kelas {k}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </View>
-              ) : (
+              {role === 'asisten' ? (
                 <TextField
-                  label="Kode Undangan Asisten"
+                  label="Kode Undangan Asprak"
                   placeholder="Masukkan kode undangan khusus"
                   value={inviteCode}
                   onChangeText={(t) => {
@@ -260,7 +217,7 @@ export default function DaftarScreen() {
                   hint="Didapatkan dari pengelola laboratorium"
                   error={inviteError}
                 />
-              )}
+              ) : null}
 
               <PasswordField
                 label="Kata Sandi (Min. 8 Karakter)"
@@ -387,31 +344,6 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   roleTabTextActive: {
-    color: colors.onPrimary,
-  },
-  kelasRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  kelasPill: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderColor: colors.borderStrong,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    alignItems: 'center',
-  },
-  kelasPillActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  kelasPillText: {
-    ...typography.body,
-    fontWeight: '600',
-    color: colors.text,
-  },
-  kelasPillTextActive: {
     color: colors.onPrimary,
   },
   formGroup: {

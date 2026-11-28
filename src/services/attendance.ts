@@ -11,6 +11,7 @@ import {
 import { db, isFirebaseReady } from './firebase';
 import { connectionService } from './connection';
 import { devWarn } from './devLog';
+import { isPraktikanOfLab } from './labs';
 import { MAX_ACCURACY_M } from '@/constants/location';
 import { dummyAttendances, dummySessionCodes } from '@/data/dummy';
 import type { Attendance, AttendResult, Lab, LokasiPresensi, Session, User } from '@/types';
@@ -106,11 +107,11 @@ export async function submitAttendance(
     return { ok: false, reason: 'NO_CONNECTION' };
   }
 
-  // 2. Pra-cek sesi & kelas
+  // 2. Pra-cek sesi & keanggotaan lab
   if (session.status !== 'open') {
     return { ok: false, reason: 'SESSION_NOT_OPEN' };
   }
-  if (!user.kelas || user.kelas !== session.kelas) {
+  if (!lab || !isPraktikanOfLab(lab, user.email)) {
     return { ok: false, reason: 'NOT_IN_CLASS' };
   }
 
@@ -132,7 +133,6 @@ export async function submitAttendance(
       id: attendanceId,
       sessionId,
       userId: user.id,
-      kelas: user.kelas,
       code: code.trim(),
       timestamp: new Date().toISOString(),
       labId,
@@ -157,7 +157,6 @@ export async function submitAttendance(
       await setDoc(attRef, {
         sessionId,
         userId: user.id,
-        kelas: user.kelas,
         code: code.trim(),
         timestamp: serverTimestamp(),
         labId,
@@ -174,7 +173,6 @@ export async function submitAttendance(
         id: attendanceId,
         sessionId,
         userId: user.id,
-        kelas: user.kelas,
         code: code.trim(),
         timestamp: new Date().toISOString(),
         labId,

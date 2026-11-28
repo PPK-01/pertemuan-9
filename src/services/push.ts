@@ -1,4 +1,5 @@
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { normalizeEmail } from '@/constants/denda';
 import type { Izin, Lab, NotifPayload, Session, User } from '@/types';
 import { formatDate, formatTime } from '@/utils/time';
 import { extractBarkKeyFromToken, isBarkDeviceToken, sendBarkNotification } from './bark';
@@ -189,9 +190,43 @@ export async function sendNotificationToUsers(
   }
 }
 
-async function resolvePraktikanUidsForClass(kelas: string, users: User[]): Promise<string[]> {
-  const targetKelas = kelas.trim().toLowerCase();
-  if (!targetKelas) return [];
+async function resolvePraktikanUidsForLab(
+  session: Session,
+  users: User[],
+  labs: Lab[],
+): Promise<string[]> {
+  if (!session.labId) return [];
+
+  let lab = labs.find((l) => l.id === session.labId) ?? null;
+  if (!lab && isFirebaseReady && db) {
+    try {
+      const labSnap = await withTimeout(getDoc(doc(db, 'labs', session.labId)));
+      if (labSnap.exists()) {
+        const data = labSnap.data();
+        lab = {
+          id: labSnap.id,
+          nama: data.nama,
+          lat: data.lat,
+          lng: data.lng,
+          radiusM: data.radiusM,
+          createdBy: data.createdBy,
+          createdAt: '',
+          updatedBy: data.updatedBy,
+          updatedAt: '',
+          praktikanEmails: Array.isArray(data.praktikanEmails)
+            ? data.praktikanEmails.filter((e): e is string => typeof e === 'string').map(normalizeEmail)
+            : [],
+        };
+      }
+    } catch (err) {
+      devWarn('push-resolveLab', err);
+    }
+  }
+
+  const memberEmails = new Set(
+    (lab?.praktikanEmails ?? []).map(normalizeEmail).filter(Boolean),
+  );
+  if (memberEmails.size === 0) return [];
 
   let sourceUsers = users;
   if (sourceUsers.length === 0 && isFirebaseReady && db) {
@@ -218,28 +253,28 @@ async function resolvePraktikanUidsForClass(kelas: string, users: User[]): Promi
     .filter(
       (u) =>
         u.role === 'praktikan' &&
-        (u.kelas ?? '').trim().toLowerCase() === targetKelas,
+        memberEmails.has(normalizeEmail(u.email ?? '')),
     )
     .map((u) => u.id);
 }
 
 /**
  * Notifikasi N1: Status sesi dijadwalkan dibuka (scheduled → open).
- * Penerima: praktikan kelas sesi tersebut.
+ * Penerima: praktikan anggota lab sesi tersebut.
  */
 export async function notifySessionOpened(
   session: Session,
   users: User[],
   labs: Lab[],
 ): Promise<void> {
-  const praktikanUids = await resolvePraktikanUidsForClass(session.kelas, users);
+  const praktikanUids = await resolvePraktikanUidsForLab(session, users, labs);
   if (praktikanUids.length === 0) return;
 
   const lab = session.labId ? labs.find((l) => l.id === session.labId) : null;
   const labName = lab?.nama || session.ruang || 'Lab';
 
   const title = 'Sesi dibuka';
-  const body = `${session.praktikum} kelas ${session.kelas} dibuka. Presensi sekarang di ${labName}.`;
+  const body = `${session.praktikum} dibuka. Presensi sekarang di ${labName}.`;
   const payload: NotifPayload = { type: 'session_opened', sessionId: session.id };
 
   await sendNotificationToUsers(praktikanUids, title, body, payload);
@@ -247,14 +282,14 @@ export async function notifySessionOpened(
 
 /**
  * Notifikasi N2: Sesi baru dibuat.
- * Penerima: praktikan kelas sesi tersebut.
+ * Penerima: praktikan anggota lab sesi tersebut.
  */
 export async function notifySessionCreated(
   session: Session,
   users: User[],
   labs: Lab[],
 ): Promise<void> {
-  const praktikanUids = await resolvePraktikanUidsForClass(session.kelas, users);
+  const praktikanUids = await resolvePraktikanUidsForLab(session, users, labs);
   if (praktikanUids.length === 0) return;
 
   const lab = session.labId ? labs.find((l) => l.id === session.labId) : null;
@@ -269,15 +304,15 @@ export async function notifySessionCreated(
 }
 
 /**
- * Notifikasi perubahan jadwal sesi (waktu mulai atau selesai). Tidak dikirim bila lab ikut berubah (N4).
- * Penerima: praktikan kelas sesi tersebut.
+ * Notifikasi N6: Perubahan jadwal sesi (waktu mulai atau selesai). Tidak dikirim bila lab ikut berubah (N4).
+ * Penerima: praktikan anggota lab sesi tersebut.
  */
 export async function notifySessionUpdated(
   session: Session,
   users: User[],
   labs: Lab[],
 ): Promise<void> {
-  const praktikanUids = await resolvePraktikanUidsForClass(session.kelas, users);
+  const praktikanUids = await resolvePraktikanUidsForLab(session, users, labs);
   if (praktikanUids.length === 0) return;
 
   const lab = session.labId ? labs.find((l) => l.id === session.labId) : null;
@@ -316,14 +351,15 @@ export async function notifyIzinDecided(
 
 /**
  * Notifikasi N4: Lokasi sesi praktikum berubah (labId sesi berubah atau koordinat/nama lab berubah).
- * Penerima: praktikan kelas sesi tersebut.
+ * Penerima: praktikan anggota lab sesi tersebut.
  */
 export async function notifyLocationChanged(
   session: Session,
   users: User[],
   labName: string,
+  labs: Lab[] = [],
 ): Promise<void> {
-  const praktikanUids = await resolvePraktikanUidsForClass(session.kelas, users);
+  const praktikanUids = await resolvePraktikanUidsForLab(session, users, labs);
   if (praktikanUids.length === 0) return;
 
   const title = 'Lokasi praktikum berubah';

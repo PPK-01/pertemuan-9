@@ -16,6 +16,7 @@ import {
   useAttendanceByUser,
   useCurrentUser,
   useIzinByUser,
+  useLabsForPraktikan,
   useSessionsForUser,
   useSyncState,
 } from '@/store/appStore';
@@ -44,6 +45,7 @@ export default function RiwayatScreen() {
   const sessions = useSessionsForUser(userId);
   const attendances = useAttendanceByUser(userId);
   const izinList = useIzinByUser(userId);
+  const memberLabs = useLabsForPraktikan();
 
   const attendancesSync = useSyncState('attendances');
   const sessionsSync = useSyncState('sessions');
@@ -114,7 +116,11 @@ export default function RiwayatScreen() {
               <View style={styles.headerBlock}>
                 <IdentityCard
                   name={currentUser.name}
-                  keyInfo={currentUser.kelas ? `Kelas ${currentUser.kelas}` : 'Praktikan'}
+                  keyInfo={
+                    memberLabs.length > 0
+                      ? memberLabs.map((l) => l.nama).join(' · ')
+                      : 'Praktikan'
+                  }
                   supportingInfo="Laboratorium Komputer"
                   actionLabel="Keluar"
                   onAction={handleLogout}

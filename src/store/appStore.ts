@@ -4,6 +4,7 @@ import type { AppStateStatus } from 'react-native';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 import { LOCATION_TIMEOUT_MS, MAX_ACCURACY_M } from '@/constants/location';
+import { normalizeEmail } from '@/constants/denda';
 import {
   dummyAttendances,
   dummyIzin,
@@ -27,6 +28,7 @@ import {
   addLab as svcAddLab,
   deleteLab as svcDeleteLab,
   isAsprakOfLab,
+  isPraktikanOfLab,
   updateLab as svcUpdateLab,
 } from '@/services/labs';
 import {
@@ -459,7 +461,7 @@ export const useAppStore = create<AppStoreState>()((set, get) => ({
         // N4: labId sesi yang belum Ditutup berubah
         const newLab = patch.labId ? get().labs.find((l) => l.id === patch.labId) : null;
         const labName = newLab?.nama || 'Lab';
-        notifyLocationChanged(updatedSession, get().users, labName).catch((err) => {
+        notifyLocationChanged(updatedSession, get().users, labName, get().labs).catch((err) => {
           devWarn('notify-updateSession', err);
         });
       }
@@ -567,7 +569,7 @@ export const useAppStore = create<AppStoreState>()((set, get) => ({
       );
       const newLabName = patch.nama || oldLab?.nama || 'Lab';
       for (const s of affectedSessions) {
-        notifyLocationChanged(s, get().users, newLabName).catch((err) => {
+        notifyLocationChanged(s, get().users, newLabName, get().labs).catch((err) => {
           devWarn('notify-updateLab', err);
         });
       }
@@ -760,8 +762,15 @@ export const useAppStore = create<AppStoreState>()((set, get) => ({
       return { ok: false, reason: 'SESSION_NOT_OPEN' };
     }
 
-    // 3. Kelas berbeda
-    if (!user.kelas || user.kelas !== session.kelas) {
+    // 3. Lab tidak ada & keanggotaan lab
+    if (!session.labId) {
+      return { ok: false, reason: 'NO_LAB' };
+    }
+    const lab = get().labs.find((l) => l.id === session.labId);
+    if (!lab) {
+      return { ok: false, reason: 'NO_LAB' };
+    }
+    if (!isPraktikanOfLab(lab, user.email)) {
       return { ok: false, reason: 'NOT_IN_CLASS' };
     }
 
@@ -779,15 +788,6 @@ export const useAppStore = create<AppStoreState>()((set, get) => ({
     );
     if (approvedIzin) {
       return { ok: false, reason: 'IZIN_APPROVED' };
-    }
-
-    // 6. Lab tidak ada
-    if (!session.labId) {
-      return { ok: false, reason: 'NO_LAB' };
-    }
-    const lab = get().labs.find((l) => l.id === session.labId);
-    if (!lab) {
-      return { ok: false, reason: 'NO_LAB' };
     }
 
     // 7. Status lokasi bukan 'ready'
@@ -923,11 +923,17 @@ export function computeRekap(
   users: User[],
   attendances: Attendance[],
   izinList: Izin[],
+  lab?: Lab | null,
 ): Rekap {
-  // Hanya praktikan di kelas sesi
-  const praktikan = users.filter(
-    (user) => user.role === 'praktikan' && user.kelas === session.kelas,
-  );
+  // Praktikan anggota lab sesi (atau fallback kelas pada sesi lama tanpa praktikanEmails).
+  const praktikan = lab?.praktikanEmails
+    ? (() => {
+        const memberEmails = new Set(lab.praktikanEmails.map(normalizeEmail));
+        return users.filter(
+          (user) => user.role === 'praktikan' && memberEmails.has(normalizeEmail(user.email)),
+        );
+      })()
+    : users.filter((user) => user.role === 'praktikan' && user.kelas === session.kelas);
 
   // 1. Hadir (urut waktu paling awal)
   const attendanceByUser = new Map<string, Attendance>();
@@ -1014,7 +1020,10 @@ export function useSessionsForUser(userId: string): Session[] {
         );
         visible = state.sessions.filter((s) => Boolean(s.labId && allowedLabIds.has(s.labId)));
       } else {
-        visible = state.sessions.filter((s) => s.kelas === user.kelas);
+        const allowedLabIds = new Set(
+          state.labs.filter((lab) => isPraktikanOfLab(lab, user.email)).map((lab) => lab.id),
+        );
+        visible = state.sessions.filter((s) => Boolean(s.labId && allowedLabIds.has(s.labId)));
       }
 
       return [...visible].sort((a, b) => a.startAt.localeCompare(b.startAt));
@@ -1115,13 +1124,14 @@ export function useHasAttended(sessionId: string, userId: string): boolean {
 
 export function useRekap(sessionId: string): Rekap | null {
   const session = useSessionById(sessionId);
+  const lab = useLabForSession(sessionId);
   const users = useAppStore((state) => state.users);
   const attendances = useAppStore((state) => state.attendances);
   const izinList = useAppStore((state) => state.izinList);
 
   return useMemo(
-    () => (session ? computeRekap(session, users, attendances, izinList) : null),
-    [session, users, attendances, izinList],
+    () => (session ? computeRekap(session, users, attendances, izinList, lab) : null),
+    [session, lab, users, attendances, izinList],
   );
 }
 
@@ -1205,6 +1215,17 @@ export function useLabsForAsprak(): Lab[] {
   );
 }
 
+/** Daftar lab tempat praktikan saat ini terdaftar sebagai anggota. */
+export function useLabsForPraktikan(): Lab[] {
+  return useAppStore(
+    useShallow((state) => {
+      const user = state.currentUser;
+      if (!user || user.role !== 'praktikan') return [];
+      return state.labs.filter((lab) => isPraktikanOfLab(lab, user.email));
+    }),
+  );
+}
+
 export function useLabById(id: string | undefined): Lab | null {
   return useAppStore((state) =>
     id ? state.labs.find((l) => l.id === id) ?? null : null,
@@ -1229,6 +1250,7 @@ export function useLabActivity(labId: string | undefined): {
   berikutnya: Session[];
 } {
   const sessions = useAppStore((state) => state.sessions);
+  const labs = useAppStore((state) => state.labs);
   const currentUser = useAppStore((state) => state.currentUser);
 
   return useMemo(() => {
@@ -1237,7 +1259,10 @@ export function useLabActivity(labId: string | undefined): {
 
     let labSessions = sessions.filter((s) => s.labId === labId);
     if (currentUser && currentUser.role === 'praktikan') {
-      labSessions = labSessions.filter((s) => s.kelas === currentUser.kelas);
+      const lab = labs.find((l) => l.id === labId);
+      if (!lab || !isPraktikanOfLab(lab, currentUser.email)) {
+        labSessions = [];
+      }
     }
 
     const berlangsung = labSessions.filter(
@@ -1251,7 +1276,7 @@ export function useLabActivity(labId: string | undefined): {
       .sort((a, b) => a.startAt.localeCompare(b.startAt));
 
     return { berlangsung, berikutnya };
-  }, [labId, sessions, currentUser]);
+  }, [labId, sessions, labs, currentUser]);
 }
 
 let watchRefCount = 0;
@@ -1432,6 +1457,7 @@ export function useTodaySessionsForAttendance(): {
   canAttend: boolean;
 }[] {
   const sessions = useAppStore((state) => state.sessions);
+  const labs = useAppStore((state) => state.labs);
   const attendances = useAppStore((state) => state.attendances);
   const izinList = useAppStore((state) => state.izinList);
   const currentUser = useAppStore((state) => state.currentUser);
@@ -1440,8 +1466,13 @@ export function useTodaySessionsForAttendance(): {
     if (!currentUser || currentUser.role !== 'praktikan') return [];
 
     const todayStr = new Date().toISOString().slice(0, 10);
+    const allowedLabIds = new Set(
+      labs.filter((lab) => isPraktikanOfLab(lab, currentUser.email)).map((lab) => lab.id),
+    );
     const userSessions = sessions.filter(
-      (s) => s.kelas === currentUser.kelas && s.startAt.startsWith(todayStr),
+      (s) =>
+        Boolean(s.labId && allowedLabIds.has(s.labId)) &&
+        s.startAt.startsWith(todayStr),
     );
 
     const items = userSessions.map((session) => {
@@ -1466,7 +1497,7 @@ export function useTodaySessionsForAttendance(): {
       if (!a.canAttend && b.canAttend) return 1;
       return a.session.startAt.localeCompare(b.session.startAt);
     });
-  }, [sessions, attendances, izinList, currentUser]);
+  }, [sessions, labs, attendances, izinList, currentUser]);
 }
 
 export function useNotifPermission(): NotificationPermission {
