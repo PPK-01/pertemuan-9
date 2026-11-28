@@ -3,9 +3,9 @@
  * Dipindahkan dari src/app/asisten/lab/index.tsx ke sini.
  * Aslab bisa melihat, membuat, mengubah, dan menghapus lab pada mata kuliah miliknya.
  */
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import type { Href } from 'expo-router';
 
 import { AppBar } from '@/components/ui/AppBar';
@@ -16,8 +16,8 @@ import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
 import { PRESSED_OPACITY } from '@/components/ui/pressable';
 import { DeleteLabSheet } from '@/features/lab/DeleteLabSheet';
-import { useCurrentUser, useIsOnline } from '@/store/appStore';
-import { useAslabStore, useAslabLabs, useAslabLabsSync } from '@/store/aslabStore';
+import { useIsOnline } from '@/store/appStore';
+import { useAslabLabs, useAslabLabsSync } from '@/store/aslabStore';
 import { deleteAslabLab } from '@/services/aslab';
 import { DEFAULT_GRACE_MINUTES } from '@/constants/denda';
 import { colors } from '@/theme/colors';
@@ -77,7 +77,6 @@ function ListSeparator() {
 
 export default function AslabLabListScreen() {
   const { mkId, mkNama } = useLocalSearchParams<{ mkId: string; mkNama: string }>();
-  const currentUser = useCurrentUser();
   const isOnline = useIsOnline();
   const allLabs = useAslabLabs();
   const labsSync = useAslabLabsSync();

@@ -9,7 +9,6 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDoc,
   getDocs,
   onSnapshot,
   query,
@@ -360,6 +359,30 @@ export async function updateAslabLab(
     );
     if (isDuplicate) {
       return { ok: false, code: 'DUPLICATE', message: 'Nama lab sudah digunakan.' };
+    }
+  }
+
+  if (patch.gedung !== undefined && patch.gedung !== null) {
+    if (patch.gedung.trim().length > 60) {
+      return { ok: false, code: 'INVALID_INPUT', message: 'Nama gedung maksimal 60 karakter.' };
+    }
+  }
+
+  if (patch.lat !== undefined) {
+    if (typeof patch.lat !== 'number' || !Number.isFinite(patch.lat) || patch.lat < -90 || patch.lat > 90) {
+      return { ok: false, code: 'INVALID_INPUT', message: 'Latitude harus berupa angka antara -90 dan 90.' };
+    }
+  }
+
+  if (patch.lng !== undefined) {
+    if (typeof patch.lng !== 'number' || !Number.isFinite(patch.lng) || patch.lng < -180 || patch.lng > 180) {
+      return { ok: false, code: 'INVALID_INPUT', message: 'Longitude harus berupa angka antara -180 dan 180.' };
+    }
+  }
+
+  if (patch.radiusM !== undefined) {
+    if (typeof patch.radiusM !== 'number' || !Number.isInteger(patch.radiusM) || patch.radiusM < 10 || patch.radiusM > 200) {
+      return { ok: false, code: 'INVALID_INPUT', message: 'Radius harus berupa bilangan bulat antara 10 dan 200 meter.' };
     }
   }
 
