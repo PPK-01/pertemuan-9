@@ -4,9 +4,9 @@
  * serta shortcut ke kelola lab dan anggota.
  * Dashboard lengkap (FR-69, FR-70) dikerjakan di Tahap 3.
  */
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import type { Href } from 'expo-router';
 
 import { AppBar } from '@/components/ui/AppBar';
@@ -15,13 +15,14 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadingState } from '@/components/ui/LoadingState';
 import { Screen } from '@/components/ui/Screen';
+import { SyncErrorState } from '@/components/ui/SyncErrorState';
 import { PRESSED_OPACITY } from '@/components/ui/pressable';
 import { useAppStore, useCurrentUser, useIsOnline } from '@/store/appStore';
-import { useAslabLabs, useAslabMataKuliah, useAslabMataKuliahSync } from '@/store/aslabStore';
+import { useAslabStore, useAslabLabs, useAslabMataKuliah, useAslabMataKuliahSync } from '@/store/aslabStore';
 import { colors } from '@/theme/colors';
-import { radius, spacing } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import type { Lab, MataKuliah } from '@/types';
+import type { MataKuliah } from '@/types';
 
 type LabCountByMk = Record<string, number>;
 
@@ -69,6 +70,8 @@ export default function AslabIndexScreen() {
   const isOnline = useIsOnline();
   const mataKuliah = useAslabMataKuliah();
   const mkSync = useAslabMataKuliahSync();
+  const mkError = useAslabStore((s) => s.mataKuliahError);
+  const startListenMataKuliah = useAslabStore((s) => s.startListenMataKuliah);
   const labs = useAslabLabs();
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -80,6 +83,7 @@ export default function AslabIndexScreen() {
   }
 
   const isLoading = mkSync === 'idle' || mkSync === 'loading';
+  const isError = mkSync === 'error';
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -92,6 +96,20 @@ export default function AslabIndexScreen() {
       <View style={styles.container}>
         <AppBar subtitle="Aslab" />
         <LoadingState fullScreen label="Memuat data Aslab…" />
+      </View>
+    );
+  }
+
+  if (isError) {
+    return (
+      <View style={styles.container}>
+        <AppBar subtitle="Aslab" />
+        <Screen edges={['left', 'right', 'bottom']}>
+          <SyncErrorState
+            message={mkError ?? 'Gagal memuat data mata kuliah.'}
+            onRetry={() => startListenMataKuliah(currentUser?.mataKuliahIds ?? [])}
+          />
+        </Screen>
       </View>
     );
   }

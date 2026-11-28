@@ -13,6 +13,7 @@ import { listenAslabLabs } from '@/services/aslab';
 export default function AslabLayout() {
   const currentUser = useCurrentUser();
   const startListenMataKuliah = useAslabStore((s) => s.startListenMataKuliah);
+  const stopListenMataKuliah = useAslabStore((s) => s.stopListenMataKuliah);
   const setLabs = useAslabStore((s) => s.setLabs);
   const setLabsSync = useAslabStore((s) => s.setLabsSync);
   const reset = useAslabStore((s) => s.reset);
@@ -29,6 +30,9 @@ export default function AslabLayout() {
     }
 
     startListenMataKuliah(mataKuliahIds);
+    return () => {
+      stopListenMataKuliah();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id, currentUser?.role]);
 
