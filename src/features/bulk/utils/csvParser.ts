@@ -1,28 +1,30 @@
 // src/features/bulk/utils/csvParser.ts
-// @ts-ignore – papaparse typings may be missing in this project
 import Papa from "papaparse";
-import { BulkKind, BulkRow, BulkRowStatus } from "../../../types/bulk";
+import { BulkKind, BulkRow, BulkRowStatus, BulkValuesByKind } from "../../../types/bulk";
 
 /**
  * Parse raw CSV content for the given bulk kind.
  * Returns an array of BulkRow with status set to "pending".
  * Validation of header & values is performed later by the review component.
  */
-export function parseCsvContent<T>(content: string, kind: BulkKind): BulkRow<T>[] {
+export function parseCsvContent<K extends BulkKind>(
+  content: string,
+  _kind: K
+): BulkRow<BulkValuesByKind[K]>[] {
   // Detect delimiter based on header line
-  const firstLine = content.split(/\r?\n/)[0] || "";
-  const commaCount = (firstLine.match(/,/g) || []).length;
-  const semicolonCount = (firstLine.match(/;/g) || []).length;
+  const firstLine = content.split(/\r?\n/)[0] ?? "";
+  const commaCount = (firstLine.match(/,/g) ?? []).length;
+  const semicolonCount = (firstLine.match(/;/g) ?? []).length;
   const delimiter = semicolonCount > commaCount ? ";" : ",";
 
-  const result = Papa.parse<T>(content, {
+  const result = Papa.parse(content, {
     header: true,
     delimiter,
     skipEmptyLines: true,
-  });
+  }) as Papa.ParseResult<BulkValuesByKind[K]>;
 
-  const rows: BulkRow<T>[] = [];
-  result.data.forEach((values: T, index: number) => {
+  const rows: BulkRow<BulkValuesByKind[K]>[] = [];
+  result.data.forEach((values: BulkValuesByKind[K], index: number) => {
     rows.push({
       rowNumber: index + 1, // 1‑based as per SRS
       values,
